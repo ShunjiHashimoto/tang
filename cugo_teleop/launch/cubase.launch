@@ -12,7 +12,7 @@
   <node name="cubase" pkg="cubase" type="cubase.py" output="screen">
   </node>
 
-  <node name="object_detection" pkg="object_detection" type="object_detection" output="screen">
+  <node name="object_detection" pkg="object_detection" type="object_detection">
   </node>
 
 </launch>

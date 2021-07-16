@@ -54,7 +54,6 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
         // マスク画像は指定した範囲の色に該当する要素は255(8ビットすべて1)、それ以外は0
         //cv::inRange(hsv_image, cv::Scalar(0, 0, 100, 0) , cv::Scalar(180, 45, 255, 0), color_mask);       // 白
         cv::inRange(hsv_image, cv::Scalar(150, 100, 50, 0), cv::Scalar(180, 255, 255, 0), color_mask);  // 赤
-        // cv::inRange(cv_ptr->image, cv::Scalar(0, 0, 50), cv::Scalar(50, 50, 255), color_mask);  // 赤
         // cv::inRange(hsv_image, cv::Scalar(20, 50, 50, 0) , cv::Scalar(100, 255, 255, 0), color_mask);   // 黄
 
         // ビット毎の論理積。マスク画像は指定した範囲以外は0で、指定範囲の要素は255なので、ビット毎の論理積を適用すると、指定した範囲の色に対応する要素はそのままで、他は0になる。
@@ -110,8 +109,7 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
 
         // 画像サイズは縦横1/4に変更
         cv::Mat cv_half_image, cv_half_image2, cv_half_image3, cv_half_image4, cv_half_image5;
-        cv::resize(cv_ptr->image, cv_half_image,cv::Size(),1.0,1.0);
-        cv::resize(gray_image, cv_half_image4,cv::Size(),1.0,1.0);
+        cv::resize(cv_ptr->image, cv_half_image,cv::Size(),0.5,0.5);
         if( 0 <= center.x && center.x <= 240) {
                 str.data = "turn left";
                 msg_pub.publish(str);
@@ -123,7 +121,7 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
                 ROS_INFO("turn right");
         }
         else{
-                if(radius >= 130.0) {
+                if(radius >= 130.0 || radius <= 10) {
                         str.data = "stop";
                         msg_pub.publish(str);
                         ROS_INFO("stop");
@@ -139,8 +137,7 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
         ROS_INFO("radius = %f", radius);
 
         // ウインドウ表示
-        cv::imshow("Original Image", cv_half_image);
-        cv::imshow("Gray Image", cv_half_image4);
+        // cv::imshow("Original Image", cv_half_image);
         cv::waitKey(3);
 }
 };

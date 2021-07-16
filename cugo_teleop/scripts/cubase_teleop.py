@@ -61,22 +61,25 @@ def joy_callback(joy_msg):
         value_2 = 0
 
     if value_1 > 0 and value_2 > 0:
-        GPIO.output(ENABLE_r, GPIO.LOW)
-        GPIO.output(ENABLE_l, GPIO.LOW)
-        p_r.ChangeDutyCycle(value_1)
-        p_l.ChangeDutyCycle(value_2)
+        # GPIO.output(ENABLE_r, GPIO.LOW)
+        # GPIO.output(ENABLE_l, GPIO.LOW)
+        # p_r.ChangeDutyCycle(value_1)
+        # p_l.ChangeDutyCycle(value_2)
+        print("go:", value_1, value_2)
 
     elif value_1 < 0 and value_2 < 0:
-        GPIO.output(ENABLE_r, GPIO.HIGH)
-        GPIO.output(ENABLE_l, GPIO.HIGH)
-        p_r.ChangeDutyCycle(-(value_1))
-        p_l.ChangeDutyCycle(-(value_2))
+        # GPIO.output(ENABLE_r, GPIO.HIGH)
+        # GPIO.output(ENABLE_l, GPIO.HIGH)
+        # p_r.ChangeDutyCycle(-(value_1))
+        # p_l.ChangeDutyCycle(-(value_2))
+        print("back:", value_1, value_2)
 
     else:
-        p_r.stop()
-        p_l.stop()
-        p_r.start(0)
-        p_l.start(0)
+        print("stop:", value_1, value_2)
+        # p_r.stop()
+        # p_l.stop()
+        # p_r.start(0)
+        # p_l.start(0)
 
 
 if __name__ == '__main__':
