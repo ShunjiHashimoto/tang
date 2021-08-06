@@ -64,7 +64,7 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
         cv::threshold(gray_image, bin_image, 80, 255, CV_THRESH_BINARY);
 
         // エッジを検出するためにCannyアルゴリズムを適用
-        //cv::Canny(gray_image, cv_ptr3->image, 15.0, 30.0, 3);
+        // cv::Canny(gray_image, cv_ptr3->image, 15.0, 30.0, 3);
 
         // ウインドウに円を描画
         //cv::circle(cv_ptr->image, cv::Point(100, 100), 20, CV_RGB(0,255,0));
@@ -110,6 +110,9 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
         // 画像サイズは縦横1/4に変更
         cv::Mat cv_half_image, cv_half_image2, cv_half_image3, cv_half_image4, cv_half_image5;
         cv::resize(cv_ptr->image, cv_half_image,cv::Size(),0.5,0.5);
+        cv::resize(cv_image2, cv_half_image2,cv::Size(),0.5,0.5);
+        cv::resize(cv_ptr3->image, cv_half_image3,cv::Size(),0.5,0.5);
+        cv::resize(bin_image, cv_half_image5,cv::Size(),0.5,0.5);
         if( 0 <= center.x && center.x <= 240) {
                 str.data = "turn left";
                 msg_pub.publish(str);
@@ -132,12 +135,14 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg){
                         ROS_INFO("go ahead");
                 }
         }
-        // ROS_INFO("{x:%f, y:%f}", center.x, center.y);
-        // ROS_INFO("size:%d", cv_ptr->image.size().width);
+        ROS_INFO("{x:%f, y:%f}", center.x, center.y);
+        ROS_INFO("size:%d", cv_ptr->image.size().width);
         ROS_INFO("radius = %f", radius);
 
         // ウインドウ表示
-        // cv::imshow("Original Image", cv_half_image);
+        cv::imshow("Original Image", cv_half_image);
+        cv::imshow("Result Image", cv_half_image2);
+        cv::imshow("Binary Image", cv_half_image5);
         cv::waitKey(3);
 }
 };

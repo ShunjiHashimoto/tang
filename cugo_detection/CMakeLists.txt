@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(object_detection)
+project(cugo_detection)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -211,3 +211,5 @@ find_package(OpenCV REQUIRED)
 include_directories(${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
 add_executable(object_detection src/object_detection.cpp)
 target_link_libraries(object_detection ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+add_executable(human_detection src/human_detection.cpp)
+target_link_libraries(human_detection ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
