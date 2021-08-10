@@ -1,6 +1,7 @@
 #include "object_detection.h"
 
-void ImageConverter::publishStr(cv::Point2f center, float radius){
+void ImageConverter::publishStr(cv::Point2f center, float radius)
+{
         if( 0 <= center.x && center.x <= 240)
         {
                 str.data = "turn left";
@@ -31,7 +32,8 @@ void ImageConverter::publishStr(cv::Point2f center, float radius){
         // ROS_INFO("radius = %f", radius);
 }
 
-int ImageConverter::maxContours(std::vector<std::vector<cv::Point>> contours){
+int ImageConverter::maxContours(std::vector<std::vector<cv::Point>> contours)
+{
         double max_area = 0;
         int max_area_contour = -1;
         if(contours.size() > 0)
@@ -64,6 +66,14 @@ void ImageConverter::imageCb(const sensor_msgs::ImageConstPtr& msg)
         cv::Point2f center, p1;
         cv_bridge::CvImagePtr cv_ptr,cv_edge;
         float radius;
+        nh_.getParam("/object_detection/hue_mn", hue_mn);
+        nh_.getParam("/object_detection/hue_mx", hue_mx);
+        nh_.getParam("/object_detection/sat_mn", sat_mn);
+        nh_.getParam("/object_detection/sat_mx", sat_mx);
+        nh_.getParam("/object_detection/value_mn", value_mn);
+        nh_.getParam("/object_detection/value_mx", value_mx);
+        nh_.getParam("/object_detection/bright_mn", bright_mn);
+        nh_.getParam("/object_detection/bright_mx", bright_mx);
 
         try
         {       // ROSからOpenCVの形式にtoCvCopy()で変換。cv_ptr->imageがcv::Matフォーマット
@@ -90,7 +100,7 @@ void ImageConverter::imageCb(const sensor_msgs::ImageConstPtr& msg)
         cv::cvtColor(bit_image, gray_image, CV_BGR2GRAY);
         // エッジを検出するためにCannyアルゴリズムを適用
         cv::Canny(gray_image, cv_edge->image, 15.0, 30.0, 3);
-        // 閾値70で2値画像に変換
+        // 閾値80で2値画像に変換
         cv::threshold(gray_image, threshold_image, 80, 255, CV_THRESH_BINARY);
 
         // ウインドウに円を描画
@@ -100,7 +110,6 @@ void ImageConverter::imageCb(const sensor_msgs::ImageConstPtr& msg)
         std::vector<std::vector<cv::Point>> contours;
         cv::findContours(threshold_image, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
 
-        // 各輪郭をcontourArea関数に渡し、最大面積を持つ輪郭を探す
         int max_area_contour = ImageConverter::maxContours(contours);
 
         // 最大面積を持つ輪郭の最小外接円を取得

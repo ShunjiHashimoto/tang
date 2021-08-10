@@ -22,14 +22,6 @@ class ImageConverter{
     // コンストラクタ
     ImageConverter() : it_(nh_)
     {
-            nh_.getParam("/object_detection/hue_mn", hue_mn);
-            nh_.getParam("/object_detection/hue_mx", hue_mx);
-            nh_.getParam("/object_detection/sat_mn", sat_mn);
-            nh_.getParam("/object_detection/sat_mx", sat_mx);
-            nh_.getParam("/object_detection/value_mn", value_mn);
-            nh_.getParam("/object_detection/value_mx", value_mx);
-            nh_.getParam("/object_detection/bright_mn", bright_mn);
-            nh_.getParam("/object_detection/bright_mx", bright_mx);
             // カラー画像をサブスクライブ
             image_sub_ = it_.subscribe("/image_raw", 1, &ImageConverter::imageCb, this);
             // 処理した画像をパブリッシュ
@@ -45,5 +37,5 @@ class ImageConverter{
 
     void imageCb(const sensor_msgs::ImageConstPtr& msg); // 画像を読んだら呼ばれる関数
     void publishStr(cv::Point2f center, float radius);   // 前後左右どこに行くか返す関数
-    int maxContours(std::vector<std::vector<cv::Point>> contours);
+    int maxContours(std::vector<std::vector<cv::Point>> contours); // 各輪郭をcontourArea関数に渡し、最大面積を持つ輪郭を探す
 };

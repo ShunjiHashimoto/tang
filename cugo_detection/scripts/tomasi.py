@@ -1,11 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 ###########################################################################################################################
-# opencv tutorial Harissコーナー検出
-# https://whitewell.sakura.ne.jp/OpenCV/py_tutorials/py_feature2d/py_features_harris/py_features_harris.html#harris-corners
-# 概要
-# 画像の画素の位置(u, v)をいろいろな方向に動かしてみて，画素値がどのように変化するか求める．
-# 画素値の変化量が大きい場合はコーナーと判定できる．
+# opencv tutorial shi-tomasiコーナー検出
 ###########################################################################################################################
 import cv2
 import sys # sysはPythonのインタプリタや実行環境に関する情報を扱うためのライブラリです。
