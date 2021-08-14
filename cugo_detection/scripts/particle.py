@@ -7,7 +7,8 @@ import rospy
 
 file_path = '/home/hashimoto/Videos/capture/hue_0_30.mp4'
 delay = 1
-window_name = 'frame'
+window_name = 'red detection'
+min_area = 1000
 
 class DetectRed():
     def __init__(self):
@@ -32,25 +33,11 @@ class DetectRed():
         # 赤色領域のマスク（255：赤色、0：赤色以外）    
         return(mask1 + mask2)
 
-
-    def maxContours(self, contours):
-        max_area = 0
-        max_area_contour = -1
-        if(len(contours)>0):
-            for i in range(0, len(contours)):
-                area = cv2.contourArea(contours[i])
-                if(max_area < area):
-                    max_area = area
-                    max_area_contour = i
-        return(max_area_contour)
-
     # ブロブ解析
     def analysis_blob(self, binary_img):
         # 2値画像のラベリング処理
         # labelは画像のラベリング結果を保持している二次元配列
         label = cv2.connectedComponentsWithStats(binary_img)
-        if(self.count == 0): 
-            print(label[2])
 
         # ブロブ情報を項目別に抽出,背景は0としてラベリングされる
         data = np.delete(label[2], 0, 0) # label[2]の0行目を削除する、0行目は背景のラベルが格納されている
@@ -68,7 +55,6 @@ class DetectRed():
         maxblob["height"] = data[:, 3][max_index]  # 高さ
         maxblob["area"] = data[:, 4][max_index]   # 面積
         maxblob["center"] = center[max_index]  # 中心座標
-    
         return maxblob
 
     def detectRed(self):
@@ -79,39 +65,25 @@ class DetectRed():
             if(not ret): 
                 print("error")
                 continue
-            frame = cv2.resize(frame, (int(frame.shape[1]/3), int(frame.shape[0]/3))) # 1/4にリサイズ, shape[1]が高さ, shape[0]が幅
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             mask = self.maskCalc(hsv)
             masked_img = cv2.bitwise_and(frame, frame, mask=mask)
 
             # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
             target = self.analysis_blob(mask)
+            if(target["area"] < min_area): continue
 
              # 面積最大ブロブの中心座標を取得
             center_x = int(target["center"][0])
             center_y = int(target["center"][1])
+            radius = int((target["width"] + target["height"])/4)
 
             # フレームに面積最大ブロブの中心周囲を円で描く
-            cv2.circle(frame, (center_x, center_y), 30, (0, 200, 0),thickness=3, lineType=cv2.LINE_AA)
-
-            # マスキング処理
-            # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
-            # gray_img = cv2.cvtColor(masked_img, cv2.COLOR_BGR2GRAY)
-            # ret, threshold_img = cv2.threshold(gray_img, 70, 255, cv2.THRESH_OTSU) # 2値化
-            # contours, hierarchy = cv2.findContours(threshold_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            # max_area_contour = self.maxContours(contours)
-            # print("no contour")
-            # if(max_area_contour == -1): continue
-            # print("ok contour")
-            # (x,y),radius = cv2.minEnclosingCircle(contours[max_area_contour])
-            # center = (int(x),int(y))
-            # radius = int(radius)
-            # cv2.circle(masked_img,center,radius,(255,0,0),2)
+            cv2.circle(frame, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
 
             if ret:
                 cv2.imshow(window_name, frame)
-                cv2.imshow("original", masked_img)
-                print("show image")
+                cv2.imshow("masked_img", masked_img)
                 if cv2.waitKey(delay) & 0xFF == ord('q'):
                     break
             else:
@@ -119,10 +91,9 @@ class DetectRed():
                 print("cant show")
             # r.sleep()
 
-
 if __name__ == "__main__":
-    video = DetectRed()
-    video.detectRed()
+    detect_red = DetectRed()
+    detect_red.detectRed()
     rospy.spin()
-    video.video.release()
+    detect_red.video.release()
     cv2.destroyWindow(window_name)
