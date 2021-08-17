@@ -9,26 +9,43 @@ import math
 file_path = '/home/hashimoto/Videos/capture/hue_0_30.mp4'
 delay = 1
 window_name = 'red detection'
-min_area = 1000
+min_area = 300
 
-class Particle():
-    def __init__(self, init_pose):
-        self.pose = init_pose
-        self.updated_pose = np.array([0, 0]).T
+class ParticleFilter:
+    @classmethod
+    # 尤度計算、現在のパーティクルの位置が赤色であるかどうかの確率計算
+    # 引数：パーティクルの位置、画像
+    # その位置の周りの画素数、その位置のhsv
+    # 返り値：そのパーティクルの尤度w
+    def is_target(cls, roi):
+        # print( (roi<=30) | (roi >=150))
+        return (roi<=30) | (roi >=150)
 
-    # particleの更新、ランダムにparticleを動かす
-    def motion_update(self):
-        self.updated_pose[0] = self.pose[0] + np.random.rand()
-        self.updated_pose[1] = self.pose[1] + np.random.rand()
+    def likelihood(cls, x, y, img, w=30, h=30):
+        x1, y1 = max(0, x-w/2), max(0, y-h/2) # x,y座標ではマイナス値がないため、maxで最低0になるようにしてる
+        x2, y2 = min(img.shape[1], x+w/2), min(img.shape[0], y+h/2) # shape[0]:行数 shape[1]：列数
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        roi = img[y1:y2, x1:x2] # region of interest, 注目領域
+        count = roi[cls.is_target(roi)].size
+        print(cls.is_target(roi))
+        print(roi[False, False, False].size)
+        print(roi[True, False, False].size)
+        print(roi[False, True, False].size)
+        print(roi[True, True, True].size)
+        print(img[y1, x1])
+        print(img[y1, x1] <=30, img[y1, x1] >=150)
+        print((img[y1, x1] <=30)|(img[y1, x1] >=150))
+        # print(count, img.size)
+        return (float(count) / img.size) if count > 0 else 0.0001
+        
+    def initialize(cls, img, x, y, N):
+        p = np.ndarray((N, 3), dtype=np.float32)  # パーティクル格納用の配列を生成
+        # 尤度計算
+        w = cls.likelihood(x, y, img)
+        p[:] = [x, y, w]
+        return p
 
-# MonteCarloLocalization
-class Mcl():
-    def __init__(self, init_pose, num):
-        self.particles = [Particle(init_pose) for i in range(num)]
-    
-    def motion_update(self):
-        for p in self.particles:
-            p.motion_update()
+        
 
 class DetectRed():
     def __init__(self):
@@ -40,8 +57,8 @@ class DetectRed():
 
     def maskCalc(self, hsv):
         # 赤色のHSVの値域1
-        hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
-        hsv_max = np.array([6,255,255])
+        hsv_min = np.array([0,128,0]) # 赤色の小さい値を除去
+        hsv_max = np.array([8,255,255])
         mask1 = cv2.inRange(hsv, hsv_min, hsv_max)
 
         # 赤色のHSVの値域2
@@ -79,6 +96,7 @@ class DetectRed():
     def detectRed(self):
         # video = self.readVideo()
         r = rospy.Rate(10) 
+        ps = None
         while not rospy.is_shutdown():
             ret, frame = self.video.read() # カメラの画像を１フレーム読み込み、frameに格納、retは読み込めたらtrueを格納する
             if(not ret): 
@@ -100,11 +118,18 @@ class DetectRed():
             # フレームに面積最大ブロブの中心周囲を円で描く
             cv2.circle(frame, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
             cv2.circle(frame, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
-            initial_pose = np.array([center_x, center_y]).T
-            mcl = Mcl(initial_pose, 5)
-            mcl.motion_update() # Mcl.motion_update() ５個のパーティクルに対して処理を行う
-            for p in mcl.particles:
-                cv2.circle(frame, (p.updated_pose[0], p.updated_pose[1]), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+
+            # particle_fileterを使って、赤色の中心位置を推定する
+            # その結果を画像に表示する、フィルタをかける前と書けた後を比較する
+            # 1.particlesに(x, y, w)を格納する、なければ初期化を行う
+            if(ps is None):
+                ps = ParticleFilter().initialize(masked_img, center_x, center_y, 10)
+                print(ps)
+            # 2.リサンプリング
+            # 3.推定
+            # 4.観測
+            # return ps, 赤色の中心座標(x, y)
+            # 中心座標に丸い点を描画
 
             if ret:
                 cv2.imshow(window_name, frame)
