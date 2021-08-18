@@ -18,7 +18,7 @@ class ParticleFilter:
     # その位置の周りの画素数、その位置のhsv
     # 返り値：そのパーティクルの尤度w
     def is_target(cls, roi):
-        return (roi<=30) | (roi >=150)
+        return (roi<=6) | (roi >=150)
 
     def likelihood(cls, x, y, img, w=30, h=30):
         x1, y1 = max(0, x-w/2), max(0, y-h/2) # x,y座標ではマイナス値がないため、maxで最低0になるようにしてる
@@ -45,16 +45,44 @@ class ParticleFilter:
         # 前状態の重みに応じてパーティクルをリサンプリング（重みは1.0）
         for i in range(ps.shape[0]):
             w = np.random.rand() * last_w # 前回の重みの合計値 * (0~1)
-            new_ps[i] = ps[(ws > w).argmax()] # 重みの合計値>wの中の最大値のインデックスを返す
-            new_ps[i, 2] = 1.0
+            new_ps[i] = ps[(ws > w).argmax()] # ws配列をスキャンして、初めてwよりも大きな値が出てきた時の配列インデックスを返す
+            new_ps[i, 2] = 1.0 # 重みを1にセットする
 
         return new_ps
+    
+    def predict_position(cls, ps, var=10.0):
+        # 分散に従ってランダムに少し位置をずらす
+        ps[:, 0] += np.random.randn((ps.shape[0])) * var # 0列目の値、つまりz座標の配列にランダムに値を加える
+        ps[:, 1] += np.random.randn((ps.shape[0])) * var
+        return ps
+
+    def calc_weight(cls, ps, img):
+        # 尤度に従ってパーティクルの重み付け
+        for i in range(ps.shape[0]):
+            ps[i][2] = cls.likelihood(ps[i, 0], ps[i, 1], img)
+
+        # 重みの正規化
+        ps[:, 2] *= ps.shape[0] / ps[:, 2].sum() # パーティクルの数/パーティクルの重みの合計値
+        return ps
+    
+    # 成績の良いパーティクルが集中している付近の位置を割り出す
+    def observer(cls, ps, img):
+        # パーティクルの重み付け
+        ps = cls.calc_weight(ps, img)
+        # 重み和の計算
+        x = (ps[:, 0] * ps[:, 2]).sum() # (パーティクルのx座標 * 重み)の合計値
+        y = (ps[:, 1] * ps[:, 2]).sum() # (パーティクルのy座標 * 重み)の合計値
+        # 重み付き平均を返す
+        return (x, y) / ps[:, 2].sum()
 
 
-    def particle_filter(cls, ps, img, center_x, center_y, N=10):
+    def particle_filter(cls, ps, img, center_x, center_y, N=500):
         if(ps is None):
                 ps = ParticleFilter().initialize(img, center_x, center_y, 10)
         ps = cls.resampling(ps)
+        ps = cls.predict_position(ps)
+        x, y = cls.observer(ps, img)
+        return ps, int(x), int(y)
 
 
 class DetectRed():
@@ -67,8 +95,8 @@ class DetectRed():
 
     def maskCalc(self, hsv):
         # 赤色のHSVの値域1
-        hsv_min = np.array([0,128,0]) # 赤色の小さい値を除去
-        hsv_max = np.array([8,255,255])
+        hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
+        hsv_max = np.array([6,255,255])
         mask1 = cv2.inRange(hsv, hsv_min, hsv_max)
 
         # 赤色のHSVの値域2
@@ -113,6 +141,8 @@ class DetectRed():
                 print("error")
                 continue
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            mask = self.maskCalc(hsv)
+            # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
             h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
             # S, Vを2値化（大津の手法）
             ret, s = cv2.threshold(hsv[:, :, 1], 0, 255,
@@ -122,9 +152,6 @@ class DetectRed():
              # s,vどちらかが0であれば、そのh[]の値を100にする、つまり赤色ではない色
              # hの配列の中でTrueになった箇所だけを操作する
             h[(s == 0) | (v == 0)] = 100
-            
-            mask = self.maskCalc(hsv)
-            # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
 
             # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
             target = self.analysisBlob(mask)
@@ -143,6 +170,16 @@ class DetectRed():
             # その結果を画像に表示する、フィルタをかける前と書けた後を比較する
             # 1.particlesに(x, y, w)を格納する、なければ初期化を行う
             ps, x, y = ParticleFilter().particle_filter(ps, h, center_x, center_y, 20)
+
+            # 画像の範囲内にあるパーティクルのみ取り出し
+            ps1 = ps[(ps[:, 0] >= 0) & (ps[:, 0] < frame.shape[1]) &
+                     (ps[:, 1] >= 0) & (ps[:, 1] < frame.shape[0])]
+
+            for i in range(ps1.shape[0]):
+                frame[int(ps1[i, 1]), int(ps1[i, 0])] = [0, 200, 0]
+                # cv2.circle(frame, int(ps1[i][0]), int(ps1[i][1]), 10, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+            cv2.rectangle(frame, (x-20, y-20), (x+20, y+20), (0, 0, 200), 5)
+
             # 2.リサンプリング
             # 3.推定
             # 4.観測
