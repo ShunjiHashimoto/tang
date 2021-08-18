@@ -30,11 +30,32 @@ class ParticleFilter:
         return (float(count) / img.size) if count > 0 else 0.0001
         
     def initialize(cls, img, x, y, N):
-        p = np.ndarray((N, 3), dtype=np.float32)  # パーティクル格納用の配列を生成
+        ps = np.ndarray((N, 3), dtype=np.float32)  # パーティクル格納用の配列を生成
         # 尤度計算
         w = cls.likelihood(x, y, img)
-        p[:] = [x, y, w]
-        return p
+        ps[:] = [x, y, w]
+        return ps
+    
+    def resampling(cls, ps):
+        # 累積重みの計算
+        ws = ps[:, 2].cumsum() # 重みの合計値を計算(1, 1, 1, 1, 1) -> (1, 2, 3, 4, /・・)
+        last_w = ws[ws.shape[0] - 1] # 最後の重み合計値
+        # 新しいパーティクル用の空配列を生成
+        new_ps = np.empty(ps.shape) # shapeで配列の要素数を返す
+        # 前状態の重みに応じてパーティクルをリサンプリング（重みは1.0）
+        for i in range(ps.shape[0]):
+            w = np.random.rand() * last_w # 前回の重みの合計値 * (0~1)
+            new_ps[i] = ps[(ws > w).argmax()] # 重みの合計値>wの中の最大値のインデックスを返す
+            new_ps[i, 2] = 1.0
+
+        return new_ps
+
+
+    def particle_filter(cls, ps, img, center_x, center_y, N=10):
+        if(ps is None):
+                ps = ParticleFilter().initialize(img, center_x, center_y, 10)
+        ps = cls.resampling(ps)
+
 
 class DetectRed():
     def __init__(self):
@@ -121,8 +142,7 @@ class DetectRed():
             # particle_fileterを使って、赤色の中心位置を推定する
             # その結果を画像に表示する、フィルタをかける前と書けた後を比較する
             # 1.particlesに(x, y, w)を格納する、なければ初期化を行う
-            if(ps is None):
-                ps = ParticleFilter().initialize(h, center_x, center_y, 10)
+            ps, x, y = ParticleFilter().particle_filter(ps, h, center_x, center_y, 20)
             # 2.リサンプリング
             # 3.推定
             # 4.観測
