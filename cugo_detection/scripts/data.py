@@ -18,7 +18,6 @@ class ParticleFilter:
     # その位置の周りの画素数、その位置のhsv
     # 返り値：そのパーティクルの尤度w
     def is_target(cls, roi):
-        # print( (roi<=30) | (roi >=150))
         return (roi<=30) | (roi >=150)
 
     def likelihood(cls, x, y, img, w=30, h=30):
@@ -26,16 +25,8 @@ class ParticleFilter:
         x2, y2 = min(img.shape[1], x+w/2), min(img.shape[0], y+h/2) # shape[0]:行数 shape[1]：列数
         x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
         roi = img[y1:y2, x1:x2] # region of interest, 注目領域
+        # 注目領域においてどれだけ赤があるか
         count = roi[cls.is_target(roi)].size
-        print(cls.is_target(roi))
-        print(roi[False, False, False].size)
-        print(roi[True, False, False].size)
-        print(roi[False, True, False].size)
-        print(roi[True, True, True].size)
-        print(img[y1, x1])
-        print(img[y1, x1] <=30, img[y1, x1] >=150)
-        print((img[y1, x1] <=30)|(img[y1, x1] >=150))
-        # print(count, img.size)
         return (float(count) / img.size) if count > 0 else 0.0001
         
     def initialize(cls, img, x, y, N):
@@ -44,8 +35,6 @@ class ParticleFilter:
         w = cls.likelihood(x, y, img)
         p[:] = [x, y, w]
         return p
-
-        
 
 class DetectRed():
     def __init__(self):
@@ -103,8 +92,18 @@ class DetectRed():
                 print("error")
                 continue
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
+            # S, Vを2値化（大津の手法）
+            ret, s = cv2.threshold(hsv[:, :, 1], 0, 255,
+                               cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 1列目を抽出(s値)
+            ret, v = cv2.threshold(hsv[:, :, 2], 0, 255,
+                               cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 2列目を抽出(v値)
+             # s,vどちらかが0であれば、そのh[]の値を100にする、つまり赤色ではない色
+             # hの配列の中でTrueになった箇所だけを操作する
+            h[(s == 0) | (v == 0)] = 100
+            
             mask = self.maskCalc(hsv)
-            masked_img = cv2.bitwise_and(frame, frame, mask=mask)
+            # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
 
             # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
             target = self.analysisBlob(mask)
@@ -123,17 +122,15 @@ class DetectRed():
             # その結果を画像に表示する、フィルタをかける前と書けた後を比較する
             # 1.particlesに(x, y, w)を格納する、なければ初期化を行う
             if(ps is None):
-                ps = ParticleFilter().initialize(masked_img, center_x, center_y, 10)
-                print(ps)
+                ps = ParticleFilter().initialize(h, center_x, center_y, 10)
             # 2.リサンプリング
             # 3.推定
             # 4.観測
             # return ps, 赤色の中心座標(x, y)
             # 中心座標に丸い点を描画
-
             if ret:
                 cv2.imshow(window_name, frame)
-                cv2.imshow("masked_img", masked_img)
+                cv2.imshow("masked_img", h)
                 if cv2.waitKey(delay) & 0xFF == ord('q'):
                     break
             else:
