@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import cv2
 import sys # sysはPythonのインタプリタや実行環境に関する情報を扱うためのライブラリです。
