@@ -13,14 +13,6 @@
   </node> -->
 
   <node name="object_detection" pkg="cugo_detection" type="object_detection" output="screen">
-    <param name = "hue_mn" type = "int" value="0"/>
-    <param name = "hue_mx" type = "int" value="30"/>
-    <param name = "sat_mn" type = "int" value="128"/>
-    <param name = "sat_mx" type = "int" value="255"/>
-    <param name = "value_mn" type = "int" value="0"/>
-    <param name = "value_mx" type = "int" value="255"/>
-    <param name = "bright_mn" type = "int" value="0"/>
-    <param name = "bright_mx" type = "int" value="0"/>
   </node>
 
 </launch>
