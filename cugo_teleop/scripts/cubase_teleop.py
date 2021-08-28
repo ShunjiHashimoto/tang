@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-## object_detection_cubase & tele_operation!　##
+## just teleop cubase ##
 
 import rospy
 import time
