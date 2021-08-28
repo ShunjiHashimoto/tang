@@ -20,4 +20,4 @@ sudo apt-get install python-rpi.gpio
 ssh ubuntu@raspi.local  
 パスワード入力  
 source ~/.bashrc  
-roslaunch cubase cubase.launch  
+roslaunch tang_bringup tang_bringup.launch  

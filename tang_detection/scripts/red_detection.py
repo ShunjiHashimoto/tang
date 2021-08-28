@@ -33,7 +33,7 @@ class PubMsg():
 class DetectRed():
     def __init__(self):
         rospy.init_node('red_detection', anonymous=True)
-        self.video = cv2.VideoCapture(rospy.get_param("/red_detection/video_path"))
+        self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
         self.pubmsg = PubMsg()
         if not self.video.isOpened():
             sys.exit()

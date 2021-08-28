@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-## object_detection_cubase & tele_operation!　##
+## object_detection_tang & tele_operation!　##
 
 import rospy
 import time
@@ -36,7 +36,7 @@ BTN_A = 0x0002
 AXS_MAX = 1.0
 AXS_OFF = 0.0
 
-class CugoController():
+class TangController():
     def __init__(self):
         self.message = "stop"
         self.btn = 0
@@ -162,7 +162,7 @@ class CugoController():
 def main():
     # start node
     rospy.init_node("cubase", anonymous=True)
-    instance = CugoController()
+    instance = TangController()
     # ratesleep
     rate = rospy.Rate(40)
     while not rospy.is_shutdown():

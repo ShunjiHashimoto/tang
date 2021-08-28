@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-## just teleop cubase ##
+## just teleop tang ##
 
 import rospy
 import time
@@ -22,7 +22,7 @@ BTN_A = 0x0002
 AXS_MAX = 1.0
 AXS_OFF = 0.0
 # y = button[3], a = button[0]
-class CugoController():
+class TangController():
     def __init__(self):
         self.message = "stop"
         self.btn = 0
@@ -122,7 +122,7 @@ def main():
     # start node
     rospy.init_node("cubase", anonymous=True)
         
-    instance = CugoController()
+    instance = TangController()
  
     # ratesleep
     rate = rospy.Rate(40)

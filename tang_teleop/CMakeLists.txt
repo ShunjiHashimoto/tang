@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(cubase)
+project(tang_teleop)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
