@@ -1,0 +1,8 @@
+<launch>
+
+  <node name="red_detection" pkg="cugo_detection" type="red_detection.py" output="screen">
+    <!-- camera なら 0, videoなら/home/hashimoto/Videos/capture/original.mp4 -->
+    <param name = "video_path" value = "/home/hashimoto/Videos/capture/original.mp4"/> 
+  </node>
+
+</launch>
