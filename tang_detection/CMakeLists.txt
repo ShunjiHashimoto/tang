@@ -16,9 +16,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
-
 catkin_package(
- INCLUDE_DIRS include
+#  INCLUDE_DIRS include
 #  LIBRARIES opencv_tutorials
 #  CATKIN_DEPENDS cv_bridge image_transport roscpp rospy sensor_msgs std_msgs
 #  DEPENDS system_lib
@@ -39,5 +38,3 @@ include_directories(
 # catkin_add_nosetests(test)
 find_package(OpenCV REQUIRED)
 include_directories(${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
-add_executable(tang_detection src/object_detection.cpp)
-target_link_libraries(tang_detection ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
