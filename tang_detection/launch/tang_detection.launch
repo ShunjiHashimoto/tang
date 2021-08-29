@@ -1,0 +1,9 @@
+<launch>
+
+  <node name="tang_detection" pkg="tang_detection" type="redanddnn_detection.py" output="screen">
+    <!-- camera なら 0, videoなら/home/hashimoto/Videos/capture/original.mp4 -->
+    <param name = "video_path" value = "/home/hashimoto/Videos/capture/original.mp4"/> 
+    <!-- <param name = "video_path" value = "0"/>  -->
+  </node>
+
+</launch>
