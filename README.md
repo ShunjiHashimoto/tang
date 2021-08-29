@@ -1,4 +1,4 @@
-# CuGo
+# TANG
 ## cameraまわりのinstall  
 ```shell
 sudo apt-get install ros-melodic-uvc-camera  
