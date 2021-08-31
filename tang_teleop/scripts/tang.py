@@ -125,6 +125,10 @@ class TangController():
         
         if(joy_msg.buttons[6]):
             newbtn |= BTN_BACK
+        elif(joy_msg.buttons[0]):
+            newbtn |= BTN_A
+        elif(joy_msg.buttons[3]):
+            newbtn |= BTN_Y
         
         joy_l = joy_msg.axes[1]
         if(joy_l <= -AXS_OFF):
