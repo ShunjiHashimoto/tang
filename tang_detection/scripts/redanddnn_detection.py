@@ -35,42 +35,6 @@ classNames = {0: 'background',
 model = cv2.dnn.readNetFromTensorflow('/home/hashimoto/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
                                       '/home/hashimoto/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
 
-class OpencvDnn():
-    @classmethod
-    def human_estimation(cls, frame):
-        # 画像の縦と横サイズを取得
-        image_height, image_width = frame.shape[:2]
-        # Imageからblobに変換する
-        model.setInput(cv2.dnn.blobFromImage(frame, size=(300, 300), swapRB=True))
-        # 画像から物体検出を行う
-        output = model.forward()
-        # outputは[1:1:100:7]のリストになっているため、後半の2つを取り出す
-        detections = output[0, 0, :, :]
-        # detectionには[?,id番号、予測確率、Xの開始点、Yの開始点、Xの終了点、Yの終了点]が入っている。
-        for detection in detections:
-            # 予測確率を取り出し0.5以上か判定する。0.5以上であれば物体が正しく検出されたと判定する。
-            confidence = detection[2]
-            if confidence > .5:
-                # id番号を取り出し、辞書からクラス名を取り出す。
-                idx = detection[1]
-                class_name = classNames[idx]
- 
-                # 検出された物体の名前を表示
-                # print(" "+str(idx) + " " + str(confidence) + " " + class_name)
- 
-                # 予測値に元の画像サイズを掛けて、四角で囲むための4点の座標情報を得る
-                axis = detection[3:7] * (image_width, image_height, image_width, image_height)
- 
-                # floatからintに変換して、変数に取り出す。画像に四角や文字列を書き込むには、座標情報はintで渡す必要がある。
-                (start_X, start_Y, end_X, end_Y) = axis.astype(np.int)[:4]
- 
-                # (画像、開始座標、終了座標、色、線の太さ)を指定
-                cv2.rectangle(frame, (start_X, start_Y), (end_X, end_Y), (23, 230, 210), thickness=2)
- 
-                # (画像、文字列、開始座標、フォント、文字サイズ、色)を指定
-                cv2.putText(frame, class_name, (start_X, start_Y), cv2.FONT_ITALIC, (.005*image_width), (0, 0, 255))
-        return frame
-
 class PubMsg():
     def __init__(self):
         self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
@@ -88,11 +52,52 @@ class PubMsg():
         rospy.loginfo(str)
         self.publisher.publish(str)
 
+class OpencvDnn():
+    @classmethod
+    def human_estimation(cls, frame, center_x, center_y, radius):
+        # 画像の縦と横サイズを取得
+        image_height, image_width = frame.shape[:2]
+        # Imageからblobに変換する
+        model.setInput(cv2.dnn.blobFromImage(frame, size=(300, 300), swapRB=True))
+        # 画像から物体検出を行う
+        output = model.forward()
+        # outputは[1:1:100:7]のリストになっているため、後半の2つを取り出す
+        detections = output[0, 0, :, :]
+        # detectionには[?,id番号、予測確率、Xの開始点、Yの開始点、Xの終了点、Yの終了点]が入っている。
+        for detection in detections:
+            # 予測確率を取り出し0.5以上か判定する。0.5以上であれば物体が正しく検出されたと判定する。
+            confidence = detection[2]
+            if confidence > .5:
+                # id番号を取り出し、辞書からクラス名を取り出す。
+                idx = detection[1]
+                class_name = classNames[idx]
+                
+                # 人以外はスキップ
+                if(class_name is not "person"): continue
+ 
+                # 予測値に元の画像サイズを掛けて、四角で囲むための4点の座標情報を得る
+                axis = detection[3:7] * (image_width, image_height, image_width, image_height)
+ 
+                # floatからintに変換して、変数に取り出す。画像に四角や文字列を書き込むには、座標情報はintで渡す必要がある。
+                (start_X, start_Y, end_X, end_Y) = axis.astype(np.int)[:4]
+
+                # 赤色の中心座標が人物領域に入ってたらその赤色の中心座標を返し、その座標をPub
+                if(start_X <= center_x and center_x <= end_X and start_Y <= center_y and center_y <= end_Y):
+                    pubmsg = PubMsg()
+                    pubmsg.pub(center_x, radius)
+ 
+                # (画像、開始座標、終了座標、色、線の太さ)を指定
+                cv2.rectangle(frame, (start_X, start_Y), (end_X, end_Y), (23, 230, 210), thickness=2)
+ 
+                # (画像、文字列、開始座標、フォント、文字サイズ、色)を指定
+                cv2.putText(frame, class_name, (start_X, start_Y), cv2.FONT_ITALIC, (.005*image_width), (0, 0, 255))             
+
+        return frame
+
 class DetectRed():
     def __init__(self):
         rospy.init_node('red_detection', anonymous=True)
         self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
-        self.pubmsg = PubMsg()
         if not self.video.isOpened():
             sys.exit()
         self.img = cv2.IMREAD_COLOR
@@ -143,8 +148,6 @@ class DetectRed():
         while not rospy.is_shutdown():
             ret, frame = self.video.read() # カメラの画像を１フレーム読み込み、frameに格納、retは読み込めたらtrueを格納する
             red_img = frame.copy()
-            # 人物検出開始
-            human_img = opencv_dnn.human_estimation(frame)
 
             # 赤色検出開始
             if(not ret): 
@@ -171,12 +174,14 @@ class DetectRed():
             center_x = int(target["center"][0])
             center_y = int(target["center"][1])
             radius = int((target["width"] + target["height"])/4)
-            # 中心座標、半径をpub
-            self.pubmsg.pub(center_x, radius)
+
+            # 人物検出開始
+            human_img = opencv_dnn.human_estimation(frame, center_x, center_y, radius)
 
             # フレームに面積最大ブロブの中心周囲を円で描く
             cv2.circle(red_img, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
             cv2.circle(red_img, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+            # cv2.circle(human_img, (start_x, start_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
 
             if ret:
                 cv2.imshow(window_name, red_img)
