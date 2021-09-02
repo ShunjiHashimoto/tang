@@ -119,7 +119,6 @@ class DetectRed():
         self.img = cv2.IMREAD_COLOR
 
     def joyCallback(self, joy_msg):
-        print(joy_msg)
         if(joy_msg.buttons[1]):
             self.mode = 'red'
         elif(joy_msg.buttons[2]):
