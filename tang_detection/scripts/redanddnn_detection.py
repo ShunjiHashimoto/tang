@@ -9,6 +9,7 @@ from numpy.lib.function_base import copy
 import cv2
 import rospy
 from std_msgs.msg import String
+from sensor_msgs.msg import Joy
 
 delay = 1
 window_name = 'red detection'
@@ -34,6 +35,8 @@ classNames = {0: 'background',
 
 model = cv2.dnn.readNetFromTensorflow('/home/hashimoto/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
                                       '/home/hashimoto/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
+                                
+
 
 class PubMsg():
     def __init__(self):
@@ -98,9 +101,25 @@ class DetectRed():
     def __init__(self):
         rospy.init_node('red_detection', anonymous=True)
         self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
+        self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
+        self.mode = None
+        self.center_x = 0
+        self.radius = 0
+        self.center_y = 0
         if not self.video.isOpened():
             sys.exit()
         self.img = cv2.IMREAD_COLOR
+
+    def joyCallback(self, joy_msg):
+        print(joy_msg)
+        if(joy_msg.buttons[1]):
+            self.mode = 'red'
+        elif(joy_msg.buttons[2]):
+            self.mode = 'human'
+        elif(joy_msg.buttons[4] or joy_msg.buttons[5]):
+            self.mode = 'redhuman'
+        elif(joy_msg.buttons[7]):
+            self.mode = 'stop'
 
     def maskCalc(self, hsv):
         # 赤色のHSVの値域1
@@ -143,46 +162,77 @@ class DetectRed():
     def detectRed(self):
         # video = self.readVideo()
         r = rospy.Rate(10)
-        opencv_dnn = OpencvDnn()
-        ps = None
+        # center_x, center_y, radius = 0
         while not rospy.is_shutdown():
             ret, frame = self.video.read() # カメラの画像を１フレーム読み込み、frameに格納、retは読み込めたらtrueを格納する
+            if(not ret):  break
             red_img = frame.copy()
+            human_img = frame.copy()
 
-            # 赤色検出開始
-            if(not ret): 
-                print("error")
-                continue
-            hsv = cv2.cvtColor(red_img, cv2.COLOR_BGR2HSV)
-            mask = self.maskCalc(hsv)
-            # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
-            h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
-            # S, Vを2値化（大津の手法）
-            ret, s = cv2.threshold(hsv[:, :, 1], 0, 255,
-                               cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 1列目を抽出(s値)
-            ret, v = cv2.threshold(hsv[:, :, 2], 0, 255,
-                               cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 2列目を抽出(v値)
-             # s,vどちらかが0であれば、そのh[]の値を100にする、つまり赤色ではない色
-             # hの配列の中でTrueになった箇所だけを操作する
-            h[(s == 0) | (v == 0)] = 100
+            # 赤色検出のみ
+            if(self.mode == 'red'):
+                hsv = cv2.cvtColor(red_img, cv2.COLOR_BGR2HSV)
+                mask = self.maskCalc(hsv)
+                # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
+                h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
+                # S, Vを2値化（大津の手法）
+                ret, s = cv2.threshold(hsv[:, :, 1], 0, 255,
+                                   cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 1列目を抽出(s値)
+                ret, v = cv2.threshold(hsv[:, :, 2], 0, 255,
+                                   cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 2列目を抽出(v値)
+                 # s,vどちらかが0であれば、そのh[]の値を100にする、つまり赤色ではない色
+                 # hの配列の中でTrueになった箇所だけを操作する
+                h[(s == 0) | (v == 0)] = 100
 
-            # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
-            target = self.analysisBlob(mask)
-            if(target["area"] < min_area): continue
+                # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
+                target = self.analysisBlob(mask)
+                if(target["area"] < min_area): continue
 
-             # 面積最大ブロブの中心座標を取得
-            center_x = int(target["center"][0])
-            center_y = int(target["center"][1])
-            radius = int((target["width"] + target["height"])/4)
+                 # 面積最大ブロブの中心座標を取得
+                self.center_x = int(target["center"][0])
+                self.center_y = int(target["center"][1])
+                self.radius   = int((target["width"] + target["height"])/4)
+                # フレームに面積最大ブロブの中心周囲を円で描く
+                cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+                cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
 
-            # 人物検出開始
-            human_img = opencv_dnn.human_estimation(frame, center_x, center_y, radius)
+            # 人物検出開始のみ
+            elif(self.mode == 'human'):
+                opencv_dnn = OpencvDnn()
+                human_img = opencv_dnn.human_estimation(frame, self.center_x, self.center_y, self.radius)
+                # cv2.imshow("masked_img", human_img)
+                # center_x, center_y, radiusを算出
+                # cv2.circle(human_img, (start_x, start_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+            
+            # 赤色+人物検出
+            elif(self.mode == 'redhuman'):
+                hsv = cv2.cvtColor(red_img, cv2.COLOR_BGR2HSV)
+                mask = self.maskCalc(hsv)
+                # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
+                h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
+                # S, Vを2値化（大津の手法）
+                ret, s = cv2.threshold(hsv[:, :, 1], 0, 255,
+                                   cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 1列目を抽出(s値)
+                ret, v = cv2.threshold(hsv[:, :, 2], 0, 255,
+                                   cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 2列目を抽出(v値)
+                 # s,vどちらかが0であれば、そのh[]の値を100にする、つまり赤色ではない色
+                 # hの配列の中でTrueになった箇所だけを操作する
+                h[(s == 0) | (v == 0)] = 100
 
-            # フレームに面積最大ブロブの中心周囲を円で描く
-            cv2.circle(red_img, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
-            cv2.circle(red_img, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
-            # cv2.circle(human_img, (start_x, start_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+                # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
+                target = self.analysisBlob(mask)
+                if(target["area"] < min_area): continue
 
+                 # 面積最大ブロブの中心座標を取得
+                self.center_x = int(target["center"][0])
+                self.center_y = int(target["center"][1])
+                self.radius   = int((target["width"] + target["height"])/4)
+                # 人物検出開始
+                opencv_dnn = OpencvDnn()
+                human_img = opencv_dnn.human_estimation(frame, self.center_x, self.center_y, self.radius)
+                # 赤色検出結果と人物検出結果を組み合わせる
+            
+            # 動画表示
             if ret:
                 cv2.imshow(window_name, red_img)
                 cv2.imshow("masked_img", human_img)
@@ -191,6 +241,8 @@ class DetectRed():
             else:
                 self.video.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 print("cant show")
+            
+            # radiusとcenter_xをpub
             # r.sleep()
 
 if __name__ == "__main__":

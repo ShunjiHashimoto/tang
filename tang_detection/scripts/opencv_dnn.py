@@ -62,7 +62,7 @@ while True:
            class_name = classNames[idx]
  
            # 検出された物体の名前を表示
-        #    print(" "+str(idx) + " " + str(confidence) + " " + class_name)
+           # print(" "+str(idx) + " " + str(confidence) + " " + class_name)
  
            # 予測値に元の画像サイズを掛けて、四角で囲むための4点の座標情報を得る
            axis = detection[3:7] * (image_width, image_height, image_width, image_height)
