@@ -57,7 +57,7 @@ class PubMsg():
 
 class OpencvDnn():
     @classmethod
-    def human_estimation(cls, frame, center_x, center_y, radius):
+    def humanEstimation(cls, frame, center_x, center_y, radius):
         # 画像の縦と横サイズを取得
         image_height, image_width = frame.shape[:2]
         # Imageからblobに変換する
@@ -85,9 +85,16 @@ class OpencvDnn():
                 (start_X, start_Y, end_X, end_Y) = axis.astype(np.int)[:4]
 
                 # 赤色の中心座標が人物領域に入ってたらその赤色の中心座標を返し、その座標をPub
+                pubmsg = PubMsg()
                 if(start_X <= center_x and center_x <= end_X and start_Y <= center_y and center_y <= end_Y):
-                    pubmsg = PubMsg()
                     pubmsg.pub(center_x, radius)
+                
+                if(center_x == 0 and center_y == 0):
+                    center_x = (start_X + end_X)/2
+                    center_y = (start_Y + end_Y)/2
+                    radius = abs(start_X - end_X)/3
+                    pubmsg.pub(center_x, radius)
+                    cv2.circle(frame, (int(center_x), int(center_y)), int(radius), (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
  
                 # (画像、開始座標、終了座標、色、線の太さ)を指定
                 cv2.rectangle(frame, (start_X, start_Y), (end_X, end_Y), (23, 230, 210), thickness=2)
@@ -101,6 +108,7 @@ class DetectRed():
     def __init__(self):
         rospy.init_node('red_detection', anonymous=True)
         self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
+        self.debug = rospy.get_param("/tang_detection/debug")
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
         self.mode = None
         self.center_x = 0
@@ -192,14 +200,18 @@ class DetectRed():
                 self.center_x = int(target["center"][0])
                 self.center_y = int(target["center"][1])
                 self.radius   = int((target["width"] + target["height"])/4)
+                pubmsg = PubMsg()
+                pubmsg.pub(self.center_x, self.radius)
                 # フレームに面積最大ブロブの中心周囲を円で描く
                 cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
                 cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
 
             # 人物検出開始のみ
             elif(self.mode == 'human'):
+                self.center_x = 0
+                self.center_y = 0
                 opencv_dnn = OpencvDnn()
-                human_img = opencv_dnn.human_estimation(frame, self.center_x, self.center_y, self.radius)
+                human_img = opencv_dnn.humanEstimation(frame, self.center_x, self.center_y, self.radius)
                 # cv2.imshow("masked_img", human_img)
                 # center_x, center_y, radiusを算出
                 # cv2.circle(human_img, (start_x, start_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
@@ -229,13 +241,15 @@ class DetectRed():
                 self.radius   = int((target["width"] + target["height"])/4)
                 # 人物検出開始
                 opencv_dnn = OpencvDnn()
-                human_img = opencv_dnn.human_estimation(frame, self.center_x, self.center_y, self.radius)
-                # 赤色検出結果と人物検出結果を組み合わせる
+                human_img = opencv_dnn.humanEstimation(frame, self.center_x, self.center_y, self.radius)
+                cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+                cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
             
             # 動画表示
             if ret:
-                cv2.imshow(window_name, red_img)
-                cv2.imshow("masked_img", human_img)
+                if(self.debug):
+                    cv2.imshow(window_name, red_img)
+                    cv2.imshow("human_img", human_img)
                 if cv2.waitKey(delay) & 0xFF == ord('q'):
                     break
             else:
