@@ -5,12 +5,12 @@
     <param name="deadzone" value="0.12" />
   </node>
 
-  <node name="tang_teleop" pkg="tang_teleop" type="tang.py" output="screen">
+  <node name="tang_teleop" pkg="tang_teleop" type="tang.py">
   </node>
 
   <node name="tang_detection" pkg="tang_detection" type="redanddnn_detection.py" output="screen">
     <!-- camera なら 0, videoなら/home/hashimoto/Videos/capture/original.mp4 -->
-    <!-- <param name = "video_path" value = "/home/hashimoto/Videos/capture/original.mp4"/>  -->
+    <!-- <param name = "video_path" value = "/home/hashimoto/catkin_ws/src/tang/tang_detection/videos/yuki.mp4"/>  -->
     <param name = "video_path" value = "0"/>
     <param name = "debug" value="0"/> 
   </node>

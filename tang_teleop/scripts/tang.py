@@ -168,7 +168,7 @@ def main():
     rospy.init_node("cubase", anonymous=True)
     instance = TangController()
     # ratesleep
-    rate = rospy.Rate(40)
+    rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         instance.modeChange()
         rate.sleep()

@@ -43,12 +43,12 @@ class PubMsg():
         self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
 
     def pub(self, center_x, radius):
-        if(0 <= center_x and center_x <= 240 and radius < 80):
+        if(0 <= center_x and center_x <= 240 and radius < 130):
             str = "turn left"
-        elif(400 < center_x and center_x <= 640 and radius < 80):
+        elif(400 < center_x and center_x <= 640 and radius < 130):
             str = "turn right"
         else:
-            if(radius >= 80 or radius <= 10):
+            if(radius >= 130 or radius <= 10):
                 str = "stop"
             else:
                 str = "go ahead"
@@ -94,13 +94,13 @@ class OpencvDnn():
                     center_y = (start_Y + end_Y)/2
                     radius = abs(start_X - end_X)/3
                     pubmsg.pub(center_x, radius)
-                    cv2.circle(frame, (int(center_x), int(center_y)), int(radius), (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+                    # cv2.circle(frame, (int(center_x), int(center_y)), int(radius), (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
  
                 # (画像、開始座標、終了座標、色、線の太さ)を指定
-                cv2.rectangle(frame, (start_X, start_Y), (end_X, end_Y), (23, 230, 210), thickness=2)
+                # cv2.rectangle(frame, (start_X, start_Y), (end_X, end_Y), (23, 230, 210), thickness=2)
  
                 # (画像、文字列、開始座標、フォント、文字サイズ、色)を指定
-                cv2.putText(frame, class_name, (start_X, start_Y), cv2.FONT_ITALIC, (.005*image_width), (0, 0, 255))             
+                # cv2.putText(frame, class_name, (start_X, start_Y), cv2.FONT_ITALIC, (.005*image_width), (0, 0, 255))             
 
         return frame
 
@@ -110,7 +110,7 @@ class DetectRed():
         self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
         self.debug = rospy.get_param("/tang_detection/debug")
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
-        self.mode = None
+        self.mode = 'redhuman'
         self.center_x = 0
         self.radius = 0
         self.center_y = 0
@@ -208,8 +208,8 @@ class DetectRed():
                 pubmsg = PubMsg()
                 pubmsg.pub(self.center_x, self.radius)
                 # フレームに面積最大ブロブの中心周囲を円で描く
-                cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
-                cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+                # cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+                # cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
 
             # 人物検出開始のみ
             elif(self.mode == 'human'):
@@ -248,8 +248,8 @@ class DetectRed():
                 # 人物検出開始
                 opencv_dnn = OpencvDnn()
                 human_img = opencv_dnn.humanEstimation(frame, self.center_x, self.center_y, self.radius)
-                cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
-                cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+                # cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+                # cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
             
             print(self.mode)
             # 動画表示
