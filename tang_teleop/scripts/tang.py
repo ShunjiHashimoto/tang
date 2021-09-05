@@ -83,8 +83,8 @@ class TangController():
         else:
             if self.message == "go ahead":
                 print("go ahead")
-                motor_l = 80.0
-                motor_r = 80.0
+                motor_l = 70.0
+                motor_r = 70.0
                 GPIO.output(ENABLE_r, GPIO.LOW)
                 GPIO.output(ENABLE_l, GPIO.LOW)
                 p_r.ChangeDutyCycle(motor_l)
@@ -92,7 +92,7 @@ class TangController():
                 
             elif self.message == "turn right":
                 print("turn right")
-                motor_l = 80.0
+                motor_l = 70.0
                 motor_r = 10.0
                 GPIO.output(ENABLE_r, GPIO.LOW)
                 GPIO.output(ENABLE_l, GPIO.LOW)
@@ -102,7 +102,7 @@ class TangController():
             elif self.message == "turn left":
                 print("turn left")
                 motor_l = 10.0
-                motor_r = 80.0
+                motor_r = 70.0
                 GPIO.output(ENABLE_r, GPIO.LOW)
                 GPIO.output(ENABLE_l, GPIO.LOW)
                 p_r.ChangeDutyCycle(motor_l)

@@ -8,10 +8,11 @@
   <node name="tang_teleop" pkg="tang_teleop" type="tang.py" output="screen">
   </node>
 
-  <node name="tang_detection" pkg="tang_detection" type="red_detection.py" output="screen">
+  <node name="tang_detection" pkg="tang_detection" type="redanddnn_detection.py" output="screen">
     <!-- camera なら 0, videoなら/home/hashimoto/Videos/capture/original.mp4 -->
     <!-- <param name = "video_path" value = "/home/hashimoto/Videos/capture/original.mp4"/>  -->
-    <param name = "video_path" value = "0"/> 
+    <param name = "video_path" value = "0"/>
+    <param name = "debug" value="0"/> 
   </node>
 
 </launch>

@@ -9,7 +9,7 @@
     <!-- camera なら 0, videoなら/home/hashimoto/Videos/capture/original.mp4 -->
     <!-- <param name = "video_path" value = "/home/hashimoto/Videos/capture/original.mp4"/>  -->
     <param name = "video_path" value = "0"/> 
-    <param name = "debug" type="bool" value="0"/>
+    <param name = "debug" type="bool" value="1"/>
   </node>
 
 </launch>

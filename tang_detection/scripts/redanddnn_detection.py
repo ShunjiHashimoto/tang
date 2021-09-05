@@ -33,8 +33,8 @@ classNames = {0: 'background',
               80: 'toaster', 81: 'sink', 82: 'refrigerator', 84: 'book', 85: 'clock',
               86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'}
 
-model = cv2.dnn.readNetFromTensorflow('/home/hashimoto/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
-                                      '/home/hashimoto/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
+model = cv2.dnn.readNetFromTensorflow('/home/ubuntu/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
+                                      '/home/ubuntu/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
                                 
 
 
@@ -43,12 +43,12 @@ class PubMsg():
         self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
 
     def pub(self, center_x, radius):
-        if(0 <= center_x and center_x <= 240 and radius < 130):
+        if(0 <= center_x and center_x <= 240 and radius < 80):
             str = "turn left"
-        elif(400 < center_x and center_x <= 640 and radius < 130):
+        elif(400 < center_x and center_x <= 640 and radius < 80):
             str = "turn right"
         else:
-            if(radius >= 130 or radius <= 10):
+            if(radius >= 80 or radius <= 10):
                 str = "stop"
             else:
                 str = "go ahead"
@@ -130,8 +130,8 @@ class DetectRed():
 
     def maskCalc(self, hsv):
         # 赤色のHSVの値域1
-        hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
-        hsv_max = np.array([6,255,255])
+        hsv_min = np.array([0,128,0]) # 赤色の小さい値を除去
+        hsv_max = np.array([30,255,255])
         mask1 = cv2.inRange(hsv, hsv_min, hsv_max)
 
         # 赤色のHSVの値域2
@@ -153,7 +153,12 @@ class DetectRed():
         center = np.delete(label[3], 0, 0)
 
         # ブロブ面積最大のインデックス
-        max_index = np.argmax(data[:, 4]) # 4列目のすべての中から最大値のindexを取得
+        try:
+            max_index = np.argmax(data[:, 4]) # 4列目のすべての中から最大値のindexを取得
+        except ValueError:
+            print("ValueError")
+            maxblob = {}
+            return maxblob
 
         # 面積最大ブロブの情報格納用
         maxblob = {}
@@ -193,6 +198,7 @@ class DetectRed():
 
                 # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
                 target = self.analysisBlob(mask)
+                if(target == {}): continue
                 if(target["area"] < min_area): continue
 
                  # 面積最大ブロブの中心座標を取得
@@ -232,6 +238,7 @@ class DetectRed():
 
                 # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
                 target = self.analysisBlob(mask)
+                if(target == {}): continue
                 if(target["area"] < min_area): continue
 
                  # 面積最大ブロブの中心座標を取得
@@ -244,6 +251,7 @@ class DetectRed():
                 cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
                 cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
             
+            print(self.mode)
             # 動画表示
             if ret:
                 if(self.debug):
