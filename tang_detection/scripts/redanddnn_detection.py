@@ -33,8 +33,8 @@ classNames = {0: 'background',
               80: 'toaster', 81: 'sink', 82: 'refrigerator', 84: 'book', 85: 'clock',
               86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'}
 
-model = cv2.dnn.readNetFromTensorflow('/home/hashimoto/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
-                                      '/home/hashimoto/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
+model = cv2.dnn.readNetFromTensorflow('/home/ubuntu/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
+                                      '/home/ubuntu/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
                                 
 
 
@@ -42,14 +42,19 @@ class PubMsg():
     def __init__(self):
         self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
 
-    def pub(self, center_x, radius):
-        print(center_x)
-        if(0 <= center_x and center_x <= 240 and radius < 130):
+    def pub(self, center_x, radius, mode):
+        print(center_x, radius)
+        if(mode == 'human'): 
+            radius_max = 50
+        else:
+            radius_max = 70
+
+        if(0 <= center_x and center_x <= 80 and radius < radius_max):
             str = "turn left"
-        elif(720 < center_x and center_x <= 960 and radius < 130):
+        elif(240 < center_x and center_x <= 320 and radius < radius_max):
             str = "turn right"
         else:
-            if(radius >= 130 or radius <= 10):
+            if(radius >= radius_max or radius <= 10):
                 str = "stop"
             else:
                 str = "go ahead"
@@ -88,14 +93,14 @@ class OpencvDnn():
                 # 赤色の中心座標が人物領域に入ってたらその赤色の中心座標を返し、その座標をPub
                 pubmsg = PubMsg()
                 if(start_X <= center_x and center_x <= end_X and start_Y <= center_y and center_y <= end_Y):
-                    pubmsg.pub(center_x, radius)
+                    pubmsg.pub(center_x, radius, 'red')
                 
                 if(center_x == 0 and center_y == 0):
                     center_x = (start_X + end_X)/2
                     center_y = (start_Y + end_Y)/2
                     radius = abs(start_X - end_X)/3
-                    pubmsg.pub(center_x, radius)
-                    cv2.circle(frame, (int(center_x), int(center_y)), int(radius), (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+                    pubmsg.pub(center_x, radius, 'human')
+                    # cv2.circle(frame, (int(center_x), int(center_y)), int(radius), (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
  
                 # (画像、開始座標、終了座標、色、線の太さ)を指定
                 cv2.rectangle(frame, (start_X, start_Y), (end_X, end_Y), (23, 230, 210), thickness=2)
@@ -111,7 +116,7 @@ class DetectRed():
         self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
         self.debug = rospy.get_param("/tang_detection/debug")
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
-        self.mode = 'redhuman'
+        self.mode = None
         self.center_x = 0
         self.radius = 0
         self.center_y = 0
@@ -131,8 +136,8 @@ class DetectRed():
 
     def maskCalc(self, hsv):
         # 赤色のHSVの値域1
-        hsv_min = np.array([0,128,0]) # 赤色の小さい値を除去
-        hsv_max = np.array([30,255,255])
+        hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
+        hsv_max = np.array([6,255,255])
         mask1 = cv2.inRange(hsv, hsv_min, hsv_max)
 
         # 赤色のHSVの値域2
@@ -209,10 +214,10 @@ class DetectRed():
                 self.center_y = int(target["center"][1])
                 self.radius   = int((target["width"] + target["height"])/4)
                 pubmsg = PubMsg()
-                pubmsg.pub(self.center_x, self.radius)
+                pubmsg.pub(self.center_x, self.radius, self.mode)
                 # フレームに面積最大ブロブの中心周囲を円で描く
-                # cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
-                # cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+                cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+                cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
 
             # 人物検出開始のみ
             elif(self.mode == 'human'):
