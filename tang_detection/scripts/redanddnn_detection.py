@@ -33,8 +33,8 @@ classNames = {0: 'background',
               80: 'toaster', 81: 'sink', 82: 'refrigerator', 84: 'book', 85: 'clock',
               86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'}
 
-model = cv2.dnn.readNetFromTensorflow('/home/ubuntu/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
-                                      '/home/ubuntu/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
+model = cv2.dnn.readNetFromTensorflow('/home/hashimoto/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
+                                      '/home/hashimoto/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
                                 
 
 
@@ -43,9 +43,10 @@ class PubMsg():
         self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
 
     def pub(self, center_x, radius):
+        print(center_x)
         if(0 <= center_x and center_x <= 240 and radius < 130):
             str = "turn left"
-        elif(400 < center_x and center_x <= 640 and radius < 130):
+        elif(720 < center_x and center_x <= 960 and radius < 130):
             str = "turn right"
         else:
             if(radius >= 130 or radius <= 10):
@@ -94,13 +95,13 @@ class OpencvDnn():
                     center_y = (start_Y + end_Y)/2
                     radius = abs(start_X - end_X)/3
                     pubmsg.pub(center_x, radius)
-                    # cv2.circle(frame, (int(center_x), int(center_y)), int(radius), (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+                    cv2.circle(frame, (int(center_x), int(center_y)), int(radius), (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
  
                 # (画像、開始座標、終了座標、色、線の太さ)を指定
-                # cv2.rectangle(frame, (start_X, start_Y), (end_X, end_Y), (23, 230, 210), thickness=2)
+                cv2.rectangle(frame, (start_X, start_Y), (end_X, end_Y), (23, 230, 210), thickness=2)
  
                 # (画像、文字列、開始座標、フォント、文字サイズ、色)を指定
-                # cv2.putText(frame, class_name, (start_X, start_Y), cv2.FONT_ITALIC, (.005*image_width), (0, 0, 255))             
+                cv2.putText(frame, class_name, (start_X, start_Y), cv2.FONT_ITALIC, (.005*image_width), (0, 0, 255))             
 
         return frame
 
@@ -177,6 +178,8 @@ class DetectRed():
         # center_x, center_y, radius = 0
         while not rospy.is_shutdown():
             ret, frame = self.video.read() # カメラの画像を１フレーム読み込み、frameに格納、retは読み込めたらtrueを格納する
+            image_height, image_width = frame.shape[:2]
+            frame = cv2.resize(frame , (int(image_width*0.5), int(image_height*0.5)))
             if(not ret):  break
             red_img = frame.copy()
             human_img = frame.copy()
