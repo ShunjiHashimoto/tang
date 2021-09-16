@@ -42,6 +42,7 @@ class PubMsg():
     def __init__(self):
         self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
 
+<<<<<<< Updated upstream
     def pub(self, center_x, radius, mode):
         print(center_x, radius)
         if(mode == 'human'): 
@@ -50,6 +51,11 @@ class PubMsg():
             radius_max = 70
 
         if(0 <= center_x and center_x <= 80 and radius < radius_max):
+=======
+    def pub(self, center_x, radius):
+        print(radius)
+        if(0 <= center_x and center_x <= 240 and radius < 130):
+>>>>>>> Stashed changes
             str = "turn left"
         elif(240 < center_x and center_x <= 320 and radius < radius_max):
             str = "turn right"
@@ -116,7 +122,11 @@ class DetectRed():
         self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
         self.debug = rospy.get_param("/tang_detection/debug")
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
+<<<<<<< Updated upstream
         self.mode = None
+=======
+        self.mode = 'red'
+>>>>>>> Stashed changes
         self.center_x = 0
         self.radius = 0
         self.center_y = 0
