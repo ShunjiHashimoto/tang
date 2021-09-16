@@ -14,9 +14,9 @@ sudo apt install python3-pip
 ```
 もしエラーが起きれば以下のサイトを参照する
 - 前回電源を切ったときに何かしら不具合が生じ、sudo apt 系ができなくなる現象
-https://github.com/ShunjiHashimoto/cugo/issues/4#issuecomment-907743709
+https://github.com/ShunjiHashimoto/tang/issues/4#issuecomment-907743709
 - ROSの署名が古い
-https://github.com/ShunjiHashimoto/cugo/issues/4#issuecomment-907744118
+https://github.com/ShunjiHashimoto/tang/issues/4#issuecomment-907744118
 
 ### Opencv
 ```bash
@@ -26,7 +26,7 @@ pip install --upgrade pip
 pip3 install opencv-python
 pip3 install opencv-contrib-python
 ```
-参考：https://github.com/ShunjiHashimoto/cugo/issues/8
+参考：https://github.com/ShunjiHashimoto/tang/issues/8
 
 ### camera
 ```bash
