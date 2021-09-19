@@ -10,11 +10,12 @@ import cv2
 import rospy
 from std_msgs.msg import String
 from sensor_msgs.msg import Joy
+import roslib.packages
 
 delay = 1
 window_name = 'red detection'
+pkg_name = 'tang_detection'
 min_area = 300
-
 classNames = {0: 'background',
               1: 'person', 2: 'bicycle', 3: 'car', 4: 'motorcycle', 5: 'airplane', 6: 'bus',
               7: 'train', 8: 'truck', 9: 'boat', 10: 'traffic light', 11: 'fire hydrant',
@@ -33,10 +34,8 @@ classNames = {0: 'background',
               80: 'toaster', 81: 'sink', 82: 'refrigerator', 84: 'book', 85: 'clock',
               86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'}
 
-model = cv2.dnn.readNetFromTensorflow('/home/ubuntu/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
-                                      '/home/ubuntu/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
-                                
-
+model = cv2.dnn.readNetFromTensorflow((roslib.packages.get_pkg_dir(pkg_name) + '/models/frozen_inference_graph.pb'),
+                                      (roslib.packages.get_pkg_dir(pkg_name) + '/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt'))
 
 class PubMsg():
     def __init__(self):
@@ -113,10 +112,10 @@ class OpencvDnn():
 class DetectRed():
     def __init__(self):
         rospy.init_node('red_detection', anonymous=True)
-        self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
+        self.video = cv2.VideoCapture(roslib.packages.get_pkg_dir(pkg_name) + rospy.get_param("/tang_detection/video_path"))
         self.debug = rospy.get_param("/tang_detection/debug")
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
-        self.mode = None
+        self.mode = 'red'
         self.center_x = 0
         self.radius = 0
         self.center_y = 0
@@ -270,9 +269,6 @@ class DetectRed():
             else:
                 self.video.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 print("cant show")
-            
-            # radiusとcenter_xをpub
-            # r.sleep()
 
 if __name__ == "__main__":
     detect_red = DetectRed()
