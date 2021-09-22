@@ -12,6 +12,7 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Joy
 import pyrealsense2 as rs
 import roslib.packages
+import time
 
 delay = 1
 window_name = 'red detection'
@@ -36,6 +37,8 @@ classNames = {0: 'background',
               80: 'toaster', 81: 'sink', 82: 'refrigerator', 84: 'book', 85: 'clock',
               86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'}
 
+# readNetFromTensorflow
+# class Net()の変数を返す
 model = cv2.dnn.readNetFromTensorflow((roslib.packages.get_pkg_dir(pkg_name) + '/models/frozen_inference_graph.pb'),
                                       (roslib.packages.get_pkg_dir(pkg_name) + '/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt'))
                                 
@@ -47,7 +50,7 @@ class PubMsg():
         self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
 
     def pub(self, center_x, radius, mode):
-        print(center_x, radius)
+        # print(center_x, radius)
         if(mode == 'human'): 
             radius_max = 50
         else:
@@ -70,9 +73,9 @@ class OpencvDnn():
     def humanEstimation(cls, frame, center_x, center_y, radius):
         # 画像の縦と横サイズを取得
         image_height, image_width = frame.shape[:2]
-        # Imageからblobに変換する
+        # Imageからblobに変換する、入力層に画像を入力、Blob(Binary Large OBject)
         model.setInput(cv2.dnn.blobFromImage(frame, size=(300, 300), swapRB=True))
-        # 画像から物体検出を行う
+        # 画像から物体検出を行う、フォワードパス（順伝搬）の計算開始
         output = model.forward()
         # outputは[1:1:100:7]のリストになっているため、後半の2つを取り出す
         detections = output[0, 0, :, :]
@@ -123,6 +126,8 @@ class DetectRed():
         self.center_x = 0
         self.radius = 0
         self.center_y = 0
+        self.all_time = 0
+        self.count = 0
         # ストリーミング初期化
         self.config = rs.config()
         self.img = cv2.IMREAD_COLOR
@@ -220,6 +225,7 @@ class DetectRed():
             frame = cv2.resize(frame , (int(image_width*0.5), int(image_height*0.5)))
             red_img = frame.copy()
             human_img = frame.copy()
+            start = time.time()
 
             # 赤色検出のみ
             if(self.mode == 'red'):
@@ -291,7 +297,12 @@ class DetectRed():
                 # cv2.circle(red_img, (self.center_x, self.center_y), self.radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
                 # cv2.circle(red_img, (self.center_x, self.center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
             
-            print(self.mode)
+            elapsed_time = time.time() - start
+            print ("計算時間:{0}".format(elapsed_time) + "[sec]")
+            self.count += 1
+            print(self.count)
+            self.all_time += elapsed_time
+            print("計算平均時間：", self.all_time/self.count)
             if(self.debug):
                 cv2.imshow(window_name, red_img)
                 cv2.imshow("human_img", human_img)
