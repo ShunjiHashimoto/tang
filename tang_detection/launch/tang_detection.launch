@@ -5,8 +5,8 @@
     <param name="deadzone" value="0.12" />
   </node> -->
 
-  <!-- <node name="tang_detection" pkg="tang_detection" type="redanddnn_detection.py" output="screen"> -->
-  <node name="tang_detection" pkg="tang_detection" type="rl_detect.py" output="screen">
+  <node name="tang_detection" pkg="tang_detection" type="redanddnn_detection.py" output="screen">
+  <!-- <node name="tang_detection" pkg="tang_detection" type="rl_detect.py" output="screen"> -->
     <!-- camera なら 0, videoなら/home/hashimoto/Videos/capture/original.mp4 -->
     <param name = "video_path" value = "/videos/original.mp4"/> 
     <!-- <param name = "video_path" value = "0"/>  -->
