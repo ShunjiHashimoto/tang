@@ -29,6 +29,7 @@ sudo apt install python-rosdep python-rosinstall python-rosinstall-generator pyt
 sudo apt install python-rosdep
 sudo rosdep init
 rosdep update
+```
 
 ### pip3
 ```bash
