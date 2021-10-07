@@ -24,6 +24,7 @@ sudo apt update
 sudo apt -y upgrade
 sudo apt install python-pip
 pip install --upgrade pip
+pip3 install -U pip
 pip3 install opencv-python
 pip3 install opencv-contrib-python
 ```
