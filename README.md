@@ -65,6 +65,7 @@ pip install --upgrade pip
 pip3 install -U pip
 pip3 install opencv-python
 pip3 install opencv-contrib-python
+pip3 install rospkg catkin_pkg
 ```
 参考：https://github.com/ShunjiHashimoto/tang/issues/8
 
