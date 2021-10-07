@@ -30,6 +30,7 @@ sudo apt install python-rosdep
 sudo rosdep init
 rosdep update
 ```
+参考：http://wiki.ros.org/melodic/Installation/Ubuntu
 
 ### pip3
 ```bash
