@@ -8,6 +8,20 @@ CuGo V3を使って収穫サポートロボットTanGを作る
 - CuGo V3 など
 
 ## 必要なパッケージ
+### Ubuntu serverをダウンロードし、SDカードに書き込む
+Ubuntu serverをダウンロード
+```bash
+wget http://cdimage.ubuntu.com/releases/bionic/release/ubuntu-18.04.5-preinstalled-server-arm64+raspi3.img.xz
+```
+ファイルを解凍
+```bash
+hashimoto@hashimoto:~/Downloads$ xz -dv ubuntu-18.04.5-preinstalled-server-arm64+raspi3.img.xz 
+```
+Raspberry Pi Imagerを使って書き込む
+書き込むimgファイルは先程選択したファイルを選択後、書き込む
+![Screenshot from 2021-10-08 07-17-44](https://user-images.githubusercontent.com/63869336/136469821-0b4fd0a0-74e5-464a-93dd-b196089ea772.png)
+
+
 ### Ubuntu
 ```bash
 sudo apt update
