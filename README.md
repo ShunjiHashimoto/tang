@@ -22,6 +22,7 @@ https://github.com/ShunjiHashimoto/tang/issues/4#issuecomment-907744118
 ```bash
 sudo apt update 
 sudo apt -y upgrade
+sudo apt install python-pip
 pip install --upgrade pip
 pip3 install opencv-python
 pip3 install opencv-contrib-python
