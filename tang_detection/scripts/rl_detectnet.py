@@ -21,14 +21,33 @@ import time
 WIDTH = 640
 HEIGHT = 480
 FPS = 60
-THRESHOLD = 1.5  # これより遠い距離の画素を無視する
-BG_PATH = "./image.png"  # 背景画像のパス
+THRESHOLD = 2.0  # これより遠い距離の画素を無視する
 
+
+class PubMsg():
+    def __init__(self):
+        self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
+
+    def pub(self, center_x, area):
+        # print(center_x, radius)
+        max_area = 220417
+
+        if(0 <= center_x and center_x <= 80 and area < max_area):
+            str = "turn left"
+        elif(240 < center_x and center_x <= 320 and area < max_area):
+            str = "turn right"
+        else:
+            if(area >= max_area or area <= 10):
+                str = "stop"
+            else:
+                str = "go ahead"
+        # rospy.loginfo(str)
+        self.publisher.publish(str)
 
 
 class DetectNet():
     def __init__(self):
-        # pass
+        rospy.init_node('human_detection', anonymous=True)
         # create video output object
         self.output = jetson.utils.videoOutput(
             "display://0")
@@ -37,47 +56,52 @@ class DetectNet():
             "ssd-mobilenet-v2", threshold=0.5)
         # create video sources
         self.input = jetson.utils.videoSource("/dev/video2")
+        self.pubmsg = PubMsg()
 
+    ##
+    #  @brief darknetを用いて人検出
+    #  @param 背景処理された画像
+    #
     def human_estimation(self, img):
-        # while (True):
-        # capture the next image
-        # darknetの型を調べる -> <class 'jetson.utils.cudaImage'>
-        # img = self.input.Capture()
-        print("darknetの型", type(img))
-        print("image: ", img)
         detections = self.net.Detect(img)
         # print the detections
-        print("detected {:d} objects in image".format(len(detections)))
+        # print("detected {:d} objects in image".format(len(detections)))
+        max_area = 0
         for detection in detections:
-            print(detection)
+            if (detection.ClassID != 1): return
+            if (max_area < detection.Area):
+                max_area = detection.Area
+                human_pos = detection.Center
         # render the image
         self.output.Render(img)
         # update the title bar
         self.output.SetStatus(
             "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
-        # print out performance info
-        # self.net.PrintProfilerTimes()
+        # print(human_pos, max_area)
         # exit on input/output EOS
-        if not self.input.IsStreaming() or not self.output.IsStreaming():
-            return
+        if not self.input.IsStreaming() or not self.output.IsStreaming() and human_pos and max_area:
+            return human_pos, max_area
+        return
 
-    def realsense_to_cudaimg(self):
+    ##
+    #  @brief 背景処理後、numpyからcuda_imgに変換、人物検出を行う
+    #  @param self
+    #
+    def main_loop(self):
         align = rs.align(rs.stream.color)
         config = rs.config()
-        config.enable_stream(rs.stream.color, WIDTH, HEIGHT, rs.format.bgr8, FPS)
-        config.enable_stream(rs.stream.depth, WIDTH, HEIGHT, rs.format.z16, FPS)
+        config.enable_stream(rs.stream.color, WIDTH,
+                             HEIGHT, rs.format.bgr8, FPS)
+        config.enable_stream(rs.stream.depth, WIDTH,
+                             HEIGHT, rs.format.z16, FPS)
 
         pipeline = rs.pipeline()
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
         max_dist = THRESHOLD/depth_scale
 
-        bg_image = cv2.imread(BG_PATH, cv2.IMREAD_COLOR)
-
         try:
-            count = 1
-            while True:
-                count += 1
+            while not rospy.is_shutdown():
                 # フレーム取得
                 frames = pipeline.wait_for_frames()
                 aligned_frames = align.process(frames)
@@ -103,38 +127,18 @@ class DetectNet():
                 # realsense側の型を調べる -> <class 'numpy.ndarray'>
                 color_filtered_image = (depth_filtered_image.reshape(
                     (HEIGHT, WIDTH, 1)) > 0)*color_image
-                # print("realsenseの型", str(color_filtered_image.shape))
-                # fill array with test colors
-                # for y in range(HEIGHT):
-                #     for x in range(WIDTH):
-                #         px = [0, float(x)/float(WIDTH)*255, float(y)/float(HEIGHT)*255, 255]
-                #         px.pop()
-                #         color_filtered_image[y, x] = px
+
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
-                self.human_estimation(cuda_mem)
+                human_pos, max_area = self.human_estimation(cuda_mem)
 
-                # img_a = jetson.utils.loadImage(color_filtered_image)
+                # 検出面積と位置によって動作を決定する
+                if (human_pos and max_area):
+                    print(human_pos, max_area)
+                    self.pubmsg.pub(human_pos[0], max_area)
 
-                # 背景合成
-                # background_masked_image = (depth_filtered_image.reshape(
-                #     (HEIGHT, WIDTH, 1)) == 0)*bg_image
-                # composite_image = background_masked_image + color_filtered_image
-
-                # 表示
-                # cv2.namedWindow('demo', cv2.WINDOW_AUTOSIZE)
-                # cv2.imshow('demo', color_filtered_image)
-
-                if cv2.waitKey(1) & 0xff == 27:
-                    break
         finally:
             pipeline.stop()
-            cv2.destroyAllWindows()
-
-
-    def main_loop(self):
-        # self.human_estimation()
-        self.realsense_to_cudaimg()
 
 
 if __name__ == "__main__":
