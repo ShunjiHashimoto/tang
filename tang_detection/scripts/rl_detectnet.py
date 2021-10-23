@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+"""
+@file rl_detectnet.py
+@brief 赤色の物体を検出かつ人を検知すれば追従
+"""
 
-# 赤色の物体を検出かつ人を検知すれば追従
 # detectnet
 import jetson.inference
 import jetson.utils
 import argparse
 
-import sys  # sysはPythonのインタプリタや実行環境に関する情報を扱うためのライブラリです。
+import sys
 import numpy as np
 from numpy.lib.function_base import copy
 import cv2
@@ -17,37 +21,44 @@ from sensor_msgs.msg import Joy
 import pyrealsense2 as rs
 import roslib.packages
 import time
+import math
+from tang_detection.msg import Command
 
 WIDTH = 640
 HEIGHT = 480
 FPS = 60
-THRESHOLD = 2.0  # これより遠い距離の画素を無視する
 
 
 class PubMsg():
+    """
+    @class PubMsg
+    @brief 説明(簡単)
+    """
+
     def __init__(self):
-        self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
+        self.publisher = rospy.Publisher('tang_cmd', Command, queue_size=1)
+        self.command = Command()
 
-    def pub(self, center_x, area):
-        # print(center_x, radius)
-        max_area = 220417
-
-        if(0 <= center_x and center_x <= 80 and area < max_area):
-            str = "turn left"
-        elif(240 < center_x and center_x <= 320 and area < max_area):
-            str = "turn right"
-        else:
-            if(area >= max_area or area <= 10):
-                str = "stop"
-            else:
-                str = "go ahead"
-        # rospy.loginfo(str)
-        self.publisher.publish(str)
+    def pub(self, pos, area):
+        """
+        @fn pub()
+        @details 検出した人の位置と大きさをpub
+        """
+        # max_area = 220417
+        self.command.pos = pos
+        self.command.max_area = int(area)
+        self.publisher.publish(self.command)
 
 
 class DetectNet():
+    """
+    @class DetectNet
+    @brief 説明(簡単)
+    """
+
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
+        self.threshold = rospy.get_param("/tang_detection/threshold")
         # create video output object
         self.output = jetson.utils.videoOutput(
             "display://0")
@@ -58,17 +69,19 @@ class DetectNet():
         self.input = jetson.utils.videoSource("/dev/video2")
         self.pubmsg = PubMsg()
 
-    ##
-    #  @brief darknetを用いて人検出
-    #  @param 背景処理された画像
-    #
     def human_estimation(self, img):
+        """
+        @fn human_estimation()
+        @param img 背景処理された画像
+        @details darknetを用いて人検出
+        """
         detections = self.net.Detect(img)
-        # print the detections
-        # print("detected {:d} objects in image".format(len(detections)))
+        if (not detections):
+            return
         max_area = 0
         for detection in detections:
-            if (detection.ClassID != 1): return
+            if (detection.ClassID != 1):
+                return
             if (max_area < detection.Area):
                 max_area = detection.Area
                 human_pos = detection.Center
@@ -77,17 +90,16 @@ class DetectNet():
         # update the title bar
         self.output.SetStatus(
             "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
-        # print(human_pos, max_area)
         # exit on input/output EOS
-        if not self.input.IsStreaming() or not self.output.IsStreaming() and human_pos and max_area:
+        if not self.input.IsStreaming() or not self.output.IsStreaming():
             return human_pos, max_area
         return
 
-    ##
-    #  @brief 背景処理後、numpyからcuda_imgに変換、人物検出を行う
-    #  @param self
-    #
     def main_loop(self):
+        """
+        @fn main_loop()
+        @brief 背景処理後、numpyからcuda_imgに変換、人物検出を行う
+        """
         align = rs.align(rs.stream.color)
         config = rs.config()
         config.enable_stream(rs.stream.color, WIDTH,
@@ -98,7 +110,7 @@ class DetectNet():
         pipeline = rs.pipeline()
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
-        max_dist = THRESHOLD/depth_scale
+        max_dist = self.threshold/depth_scale
 
         try:
             while not rospy.is_shutdown():
@@ -130,12 +142,14 @@ class DetectNet():
 
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
-                human_pos, max_area = self.human_estimation(cuda_mem)
-
-                # 検出面積と位置によって動作を決定する
-                if (human_pos and max_area):
-                    print(human_pos, max_area)
+                try:
+                    human_pos, max_area = self.human_estimation(cuda_mem)
+                    # 検出面積と位置によって動作を決定する
+                    # rospy.loginfo("human pos : %d | detect_area: %f", human_pos[0], max_area)
                     self.pubmsg.pub(human_pos[0], max_area)
+                except:
+                    rospy.logwarn("nothing human")
+                    continue
 
         finally:
             pipeline.stop()

@@ -1,16 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-## object_detection_tang & tele_operation!　##
-
 import rospy
 import time
-from geometry_msgs.msg import Twist
-from sensor_msgs.msg import Joy
 import RPi.GPIO as GPIO
-from std_msgs.msg import String
+from sensor_msgs.msg import Joy
+from tang_detection.msg import Command
 
-top = 1000
 bottom = 50
 R = 12
 L = 13
@@ -38,16 +34,19 @@ AXS_OFF = 0.0
 
 class TangController():
     def __init__(self):
-        self.message = "stop"
-        self.btn = 0
-        self.main = 0
-        self.joy_l = 0
-        self.joy_r = 0
+        self.cmd = Command()
+        self.btn = self.joy_l = self.joy_r = 0
+        self.main = 1
         self.percent = 80
+        self.ref_pos = 350
+        self.max_area = rospy.get_param("/tang_teleop/max_area")
+        self.speed = rospy.get_param("/tang_teleop/speed")
+        self.p_gain = 0.0027 * self.speed
+        self.command = 0
 
         # subscribe to motor messages on topic "msg_topic"
-        self.str_sub = rospy.Subscriber("/msg_topic", String, self.strCallback, queue_size=1)
-        
+        self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_Callback, queue_size=1)
+   
         # subscribe to joystick messages on topic "joy"
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
         
@@ -64,61 +63,59 @@ class TangController():
                 GPIO.output(ENABLE_l, GPIO.LOW)
                 p_r.ChangeDutyCycle(motor_l)
                 p_l.ChangeDutyCycle(motor_r)
-                print("go:", motor_l, motor_r)
+                rospy.loginfo("Go! | motor_l : %d | motor_r: %d", motor_l, motor_r)
             
             elif motor_l < 0 and motor_r < 0:
                 GPIO.output(ENABLE_r, GPIO.HIGH)
                 GPIO.output(ENABLE_l, GPIO.HIGH)
                 p_r.ChangeDutyCycle(-(motor_l))
                 p_l.ChangeDutyCycle(-(motor_r))
-                print("back:", motor_l, motor_r)
+                rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
             
             else:
-                print("stop:", motor_l, motor_r)
+                rospy.loginfo("Stop! | motor_l : %d | motor_r: %d",
+                              motor_l, motor_r)
                 p_r.stop()
                 p_l.stop()
                 p_r.start(0)
                 p_l.start(0)
 
         else:
-            if self.message == "go ahead":
-                print("go ahead")
-                motor_l = 60.0
-                motor_r = 60.0
-                GPIO.output(ENABLE_r, GPIO.LOW)
-                GPIO.output(ENABLE_l, GPIO.LOW)
-                p_r.ChangeDutyCycle(motor_l)
-                p_l.ChangeDutyCycle(motor_r)
-                
-            elif self.message == "turn right":
-                print("turn right")
-                motor_l = 60.0
-                motor_r = 10.0
-                GPIO.output(ENABLE_r, GPIO.LOW)
-                GPIO.output(ENABLE_l, GPIO.LOW)
-                p_r.ChangeDutyCycle(motor_l)
-                p_l.ChangeDutyCycle(motor_r)
-                
-            elif self.message == "turn left":
-                print("turn left")
-                motor_l = 10.0
-                motor_r = 60.0
-                GPIO.output(ENABLE_r, GPIO.LOW)
-                GPIO.output(ENABLE_l, GPIO.LOW)
-                p_r.ChangeDutyCycle(motor_l)
-                p_l.ChangeDutyCycle(motor_r)
-                
-            elif self.message == "stop":
-                print("stop")
+            if(self.cmd.max_area ==0 and self.cmd.pos == 0.0): return
+            motor_r = motor_l = 60
+            if (self.cmd.max_area >= self.max_area):
+                rospy.logwarn("Stop")
                 p_r.stop()
                 p_l.stop()
                 p_r.start(0)
                 p_l.start(0)
-            else:
-                print("error")
+                return
+            elif (self.command < 0):
+                motor_r += self.command
+                rospy.loginfo("Turn Left!")
+            elif (self.command >= 0):
+                motor_l -= self.command
+                rospy.loginfo("Turn Right!")
+            # rospy.logwarn(self.cmd.max_area)
+            GPIO.output(ENABLE_r, GPIO.LOW)
+            GPIO.output(ENABLE_l, GPIO.LOW)
+            p_r.ChangeDutyCycle(motor_l)
+            p_l.ChangeDutyCycle(motor_r)
+
+    def p_control(self, cur_pos):
+        """
+        @fn p_control()
+        @details P制御
+        """
+        return self.p_gain * (self.ref_pos - cur_pos)
     
-    def strCallback(self, msg):
-        self.message = msg.data
+    def cmd_Callback(self, msg):
+        # 人の位置とサイズを得る
+        self.cmd = msg
+        self.command = self.p_control(self.cmd.pos)
+        if (abs(self.command) > self.speed):
+            self.command = 0
+        # rospy.logwarn("Command: %lf", self.command)
         
     def joyCallback(self, joy_msg):
         newbtn = 0
@@ -167,7 +164,6 @@ def main():
     # start node
     rospy.init_node("cubase", anonymous=True)
     instance = TangController()
-    # ratesleep
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         instance.modeChange()

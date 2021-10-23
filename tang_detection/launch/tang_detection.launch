@@ -7,6 +7,7 @@
 
   <!-- <node name="tang_detection" pkg="tang_detection" type="redanddnn_detection.py" output="screen"> -->
   <node name="tang_detection" pkg="tang_detection" type="rl_detectnet.py" output="screen">
+    <param name = "threshold" type = "int" value = "2"/>  <!-- これより遠い距離の画素を無視する -->
     <!-- camera なら 0, videoなら/home/hashimoto/Videos/capture/original.mp4 -->
     <!-- <param name = "video_path" value = "/videos/original.mp4"/>  -->
     <!-- <param name = "video_path" value = "0"/>  -->
