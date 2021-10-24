@@ -37,7 +37,6 @@ class TangController():
         self.cmd = Command()
         self.btn = self.joy_l = self.joy_r = 0
         self.main = 1
-        self.percent = 80
         self.ref_pos = 350
         self.max_area = rospy.get_param("/tang_teleop/max_area")
         self.speed = rospy.get_param("/tang_teleop/speed")
@@ -81,9 +80,9 @@ class TangController():
                 p_l.start(0)
 
         else:
-            if(self.cmd.max_area ==0 and self.cmd.pos == 0.0): return
-            motor_r = motor_l = 60
-            if (self.cmd.max_area >= self.max_area):
+            motor_r = motor_l = self.speed
+            if self.cmd.max_area == 0: return
+            if (self.cmd.max_area >= self.max_area or self.cmd.is_human == 0):
                 rospy.logwarn("Stop")
                 p_r.stop()
                 p_l.stop()
@@ -143,22 +142,22 @@ class TangController():
         else:
             joy_r = 0
         
-        self.joy_l = int(self.percent * joy_l / (AXS_MAX - AXS_OFF))
-        self.joy_r = int(self.percent * joy_r / (AXS_MAX - AXS_OFF))
+        self.joy_l = int(self.speed * joy_l / (AXS_MAX - AXS_OFF))
+        self.joy_r = int(self.speed * joy_r / (AXS_MAX - AXS_OFF))
             
         push = ((~self.btn) & newbtn)
         self.btn = newbtn
         if(push & BTN_BACK):
             self.main = (self.main + 1)%2
         elif(push & BTN_Y):
-            self.percent += 10
+            self.speed += 10
         elif(push & BTN_A):
-            self.percent -= 10
+            self.speed -= 10
             
-        if(self.percent > 100):
-            self.percent = 100
-        elif(self.percent < 10):
-            self.percent = 10
+        if(self.speed > 100):
+            self.speed = 100
+        elif(self.speed < 10):
+            self.speed = 10
 
 def main():
     # start node

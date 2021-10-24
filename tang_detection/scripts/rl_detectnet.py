@@ -39,14 +39,13 @@ class PubMsg():
         self.publisher = rospy.Publisher('tang_cmd', Command, queue_size=1)
         self.command = Command()
 
-    def pub(self, pos, area):
+    def pub(self, cmd):
         """
         @fn pub()
         @details 検出した人の位置と大きさをpub
         """
         # max_area = 220417
-        self.command.pos = pos
-        self.command.max_area = int(area)
+        self.command = cmd
         self.publisher.publish(self.command)
 
 
@@ -68,6 +67,7 @@ class DetectNet():
         # create video sources
         self.input = jetson.utils.videoSource("/dev/video2")
         self.pubmsg = PubMsg()
+        self.command = Command()
 
     def human_estimation(self, img):
         """
@@ -79,12 +79,14 @@ class DetectNet():
         if (not detections):
             return
         max_area = 0
+        self.command.is_human = 0
         for detection in detections:
             if (detection.ClassID != 1):
-                return
-            if (max_area < detection.Area):
-                max_area = detection.Area
+                continue
+            if (max_area < detection.Area and detection.ClassID == 1):
+                max_area = int(detection.Area)
                 human_pos = detection.Center
+                self.command.is_human = 1
         # render the image
         self.output.Render(img)
         # update the title bar
@@ -92,7 +94,8 @@ class DetectNet():
             "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
         # exit on input/output EOS
         if not self.input.IsStreaming() or not self.output.IsStreaming():
-            return human_pos, max_area
+            self.command.pos = human_pos[0]
+            self.command.max_area = max_area
         return
 
     def main_loop(self):
@@ -143,10 +146,12 @@ class DetectNet():
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
                 try:
-                    human_pos, max_area = self.human_estimation(cuda_mem)
+                    self.human_estimation(cuda_mem)
                     # 検出面積と位置によって動作を決定する
                     # rospy.loginfo("human pos : %d | detect_area: %f", human_pos[0], max_area)
-                    self.pubmsg.pub(human_pos[0], max_area)
+                    self.pubmsg.pub(self.command)
+                    # print(self.command)
+                    # rospy.logwarn("human detection")
                 except:
                     rospy.logwarn("nothing human")
                     continue
