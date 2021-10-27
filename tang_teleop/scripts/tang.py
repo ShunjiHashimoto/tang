@@ -7,21 +7,30 @@ import RPi.GPIO as GPIO
 from sensor_msgs.msg import Joy
 from tang_detection.msg import Command
 
-bottom = 50
-R = 12
-L = 13
-ENABLE_r = 17
-ENABLE_l = 18
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(R, GPIO.OUT)
-GPIO.setup(L, GPIO.OUT)
-GPIO.setup(ENABLE_r, GPIO.OUT)
-GPIO.setup(ENABLE_l, GPIO.OUT)
-GPIO.output(ENABLE_r, GPIO.LOW)
-GPIO.output(ENABLE_l, GPIO.LOW)
+# modeを選択
+GPIO.setmode(GPIO.BOARD)
 
-p_r = GPIO.PWM(R, bottom)
-p_l = GPIO.PWM(L, bottom)
+gpio_pin_r = 12
+gpio_pin_l = 11
+# デジタル出力ピンを設定, 回転方向を決められる
+# DIG1 = 11(LEFT), DIG2 = 12(RIGHT)
+GPIO.setup(gpio_pin_r, GPIO.OUT)
+GPIO.setup(gpio_pin_l, GPIO.OUT)
+# GPIOをLOWに設定
+# GPIO.output(gpio_pin_r, GPIO.LOW)
+# GPIO.output(gpio_pin_l, GPIO.LOW)
+
+output_pin_r = 33
+output_pin_l = 32
+# アナログ出力ピンを設定、output_pinを32,33に設定
+# ANA1 = 32(LEFT), ANA2 = 33(RIGHT)
+GPIO.setup(output_pin_r, GPIO.OUT)
+GPIO.setup(output_pin_l, GPIO.OUT)
+GPIO.output(output_pin_r, GPIO.LOW)
+GPIO.output(output_pin_l, GPIO.LOW)
+# PWMサイクルを50Hzに設定
+p_r = GPIO.PWM(output_pin_r, 50)
+p_l = GPIO.PWM(output_pin_l, 50)
 
 p_r.start(0)
 p_l.start(0)
@@ -36,7 +45,7 @@ class TangController():
     def __init__(self):
         self.cmd = Command()
         self.btn = self.joy_l = self.joy_r = 0
-        self.main = 1
+        self.main = 0
         self.ref_pos = 350
         self.max_area = rospy.get_param("/tang_teleop/max_area")
         self.speed = rospy.get_param("/tang_teleop/speed")
@@ -54,30 +63,34 @@ class TangController():
             ### old_teleop start 
             motor_l = self.joy_l
             motor_r = self.joy_r
-            
+            print(motor_r, motor_l)
+            # input_state_r = GPIO.input(gpio_pin_r)
+            # input_state_l = GPIO.input(gpio_pin_l)
+            # rospy.logwarn("input state r = %d | input state l = %d", input_state_r, input_state_l)
+
             time.sleep(0.1)
             
-            if motor_l > 0 and motor_r > 0:
-                GPIO.output(ENABLE_r, GPIO.LOW)
-                GPIO.output(ENABLE_l, GPIO.LOW)
-                p_r.ChangeDutyCycle(motor_l)
-                p_l.ChangeDutyCycle(motor_r)
+            if motor_l >= 0 and motor_r >= 0:
+                GPIO.output(gpio_pin_r, GPIO.HIGH)
+                GPIO.output(gpio_pin_l, GPIO.HIGH)
+                p_r.ChangeDutyCycle(motor_r)
+                p_l.ChangeDutyCycle(motor_l)
                 rospy.loginfo("Go! | motor_l : %d | motor_r: %d", motor_l, motor_r)
             
             elif motor_l < 0 and motor_r < 0:
-                GPIO.output(ENABLE_r, GPIO.HIGH)
-                GPIO.output(ENABLE_l, GPIO.HIGH)
-                p_r.ChangeDutyCycle(-(motor_l))
-                p_l.ChangeDutyCycle(-(motor_r))
+                GPIO.output(gpio_pin_r, GPIO.LOW)
+                GPIO.output(gpio_pin_l, GPIO.LOW)
+                p_r.ChangeDutyCycle(-(motor_r))
+                p_l.ChangeDutyCycle(-(motor_l))
                 rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
             
-            else:
-                rospy.loginfo("Stop! | motor_l : %d | motor_r: %d",
-                              motor_l, motor_r)
-                p_r.stop()
-                p_l.stop()
-                p_r.start(0)
-                p_l.start(0)
+            # else:
+            #     rospy.loginfo("Stop! | motor_l : %d | motor_r: %d",
+            #                   motor_l, motor_r)
+            #     p_r.stop()
+            #     p_l.stop()
+            #     p_r.start(0)
+            #     p_l.start(0)
 
         else:
             motor_r = motor_l = self.speed
@@ -95,9 +108,9 @@ class TangController():
             elif (self.command >= 0):
                 motor_l -= self.command
                 rospy.loginfo("Turn Right!")
-            # rospy.logwarn(self.cmd.max_area)
-            GPIO.output(ENABLE_r, GPIO.LOW)
-            GPIO.output(ENABLE_l, GPIO.LOW)
+            rospy.logwarn(self.cmd.max_area)
+            GPIO.output(gpio_pin_r, GPIO.HIGH)
+            GPIO.output(gpio_pin_l, GPIO.HIGH)
             p_r.ChangeDutyCycle(motor_l)
             p_l.ChangeDutyCycle(motor_r)
 
