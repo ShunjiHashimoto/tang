@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+"""
+@file rl_detectnet.py
+@brief 赤色の物体を検出かつ人を検知すれば追従
+"""
+
+# detectnet
+import jetson.inference
+import jetson.utils
+import argparse
+
+import sys
+import numpy as np
+from numpy.lib.function_base import copy
+import cv2
+import rospy
+from std_msgs.msg import String
+from sensor_msgs.msg import Joy
+import pyrealsense2 as rs
+import roslib.packages
+import time
+import math
+from tang_detection.msg import Command
+
+WIDTH = 640
+HEIGHT = 480
+FPS = 60
+
+
+class PubMsg():
+    """
+    @class PubMsg
+    @brief 説明(簡単)
+    """
+
+    def __init__(self):
+        self.publisher = rospy.Publisher('tang_cmd', Command, queue_size=1)
+        self.command = Command()
+
+    def pub(self, pos, area):
+        """
+        @fn pub()
+        @details 検出した人の位置と大きさをpub
+        """
+        # max_area = 220417
+        self.command.pos = pos
+        self.command.max_area = int(area)
+        self.publisher.publish(self.command)
+
+
+class DetectNet():
+    """
+    @class DetectNet
+    @brief 説明(簡単)
+    """
+
+    def __init__(self):
+        rospy.init_node('human_detection', anonymous=True)
+        self.threshold = rospy.get_param("/tang_detection/threshold")
+        # create video output object
+        self.output = jetson.utils.videoOutput(
+            "display://0")
+        # load the object detection network
+        self.net = jetson.inference.detectNet(
+            "ssd-mobilenet-v2", threshold=0.5)
+        # create video sources
+        self.input = jetson.utils.videoSource("/dev/video2")
+        self.pubmsg = PubMsg()
+
+    def human_estimation(self, img):
+        """
+        @fn human_estimation()
+        @param img 背景処理された画像
+        @details darknetを用いて人検出
+        """
+        detections = self.net.Detect(img)
+        if (not detections):
+            return
+        max_area = 0
+        for detection in detections:
+            if (detection.ClassID != 1):
+                return
+            if (max_area < detection.Area):
+                max_area = detection.Area
+                human_pos = detection.Center
+        # render the image
+        self.output.Render(img)
+        # update the title bar
+        self.output.SetStatus(
+            "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
+        # exit on input/output EOS
+        if not self.input.IsStreaming() or not self.output.IsStreaming():
+            return human_pos, max_area
+        return
+
+    def main_loop(self):
+        """
+        @fn main_loop()
+        @brief 背景処理後、numpyからcuda_imgに変換、人物検出を行う
+        """
+        align = rs.align(rs.stream.color)
+        config = rs.config()
+        config.enable_stream(rs.stream.color, WIDTH,
+                             HEIGHT, rs.format.bgr8, FPS)
+        config.enable_stream(rs.stream.depth, WIDTH,
+                             HEIGHT, rs.format.z16, FPS)
+
+        pipeline = rs.pipeline()
+        profile = pipeline.start(config)
+        depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
+        max_dist = self.threshold/depth_scale
+
+        try:
+            while not rospy.is_shutdown():
+                # フレーム取得
+                frames = pipeline.wait_for_frames()
+                aligned_frames = align.process(frames)
+
+                color_frame = aligned_frames.get_color_frame()
+                depth_frame = aligned_frames.get_depth_frame()
+                if not depth_frame or not color_frame:
+                    continue
+                # RGB画像
+                color_image = np.asanyarray(color_frame.get_data())
+
+                # 深度画像
+                depth_color_frame = rs.colorizer().colorize(depth_frame)
+                depth_color_image = np.asanyarray(depth_color_frame.get_data())
+
+                # 指定距離以上を無視した深度画像
+                depth_image = np.asanyarray(depth_frame.get_data())
+                depth_filtered_image = (depth_image < max_dist) * depth_image
+                depth_gray_filtered_image = (
+                    depth_filtered_image * 255. / max_dist).reshape((HEIGHT, WIDTH)).astype(np.uint8)
+
+                # 指定距離以上を無視したRGB画像
+                # realsense側の型を調べる -> <class 'numpy.ndarray'>
+                color_filtered_image = (depth_filtered_image.reshape(
+                    (HEIGHT, WIDTH, 1)) > 0)*color_image
+
+                # copy to CUDA memory
+                cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
+                try:
+                    human_pos, max_area = self.human_estimation(cuda_mem)
+                    # 検出面積と位置によって動作を決定する
+                    # rospy.loginfo("human pos : %d | detect_area: %f", human_pos[0], max_area)
+                    self.pubmsg.pub(human_pos[0], max_area)
+                except:
+                    rospy.logwarn("nothing human")
+                    continue
+
+        finally:
+            pipeline.stop()
+
+
+if __name__ == "__main__":
+    detectnet = DetectNet()
+    detectnet.main_loop()
