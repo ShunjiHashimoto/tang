@@ -18,10 +18,28 @@ delay = 1
 window_name = 'red detection'
 pkg_name = 'tang_detection'
 min_area = 300
-classNames = {0: 'background', 1: 'person'}
+# classNames = {0: 'background', 1: 'person'}
+# モデルの中の訓練されたクラス
+classNames = {0: 'background',
+              1: 'person', 2: 'bicycle', 3: 'car', 4: 'motorcycle', 5: 'airplane', 6: 'bus',
+              7: 'train', 8: 'truck', 9: 'boat', 10: 'traffic light', 11: 'fire hydrant',
+              13: 'stop sign', 14: 'parking meter', 15: 'bench', 16: 'bird', 17: 'cat',
+              18: 'dog', 19: 'horse', 20: 'sheep', 21: 'cow', 22: 'elephant', 23: 'bear',
+              24: 'zebra', 25: 'giraffe', 27: 'backpack', 28: 'umbrella', 31: 'handbag',
+              32: 'tie', 33: 'suitcase', 34: 'frisbee', 35: 'skis', 36: 'snowboard',
+              37: 'sports ball', 38: 'kite', 39: 'baseball bat', 40: 'baseball glove',
+              41: 'skateboard', 42: 'surfboard', 43: 'tennis racket', 44: 'bottle',
+              46: 'wine glass', 47: 'cup', 48: 'fork', 49: 'knife', 50: 'spoon',
+              51: 'bowl', 52: 'banana', 53: 'apple', 54: 'sandwich', 55: 'orange',
+              56: 'broccoli', 57: 'carrot', 58: 'hot dog', 59: 'pizza', 60: 'donut',
+              61: 'cake', 62: 'chair', 63: 'couch', 64: 'potted plant', 65: 'bed',
+              67: 'dining table', 70: 'toilet', 72: 'tv', 73: 'laptop', 74: 'mouse',
+              75: 'remote', 76: 'keyboard', 77: 'cell phone', 78: 'microwave', 79: 'oven',
+              80: 'toaster', 81: 'sink', 82: 'refrigerator', 84: 'book', 85: 'clock',
+              86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'}
 
-model = cv2.dnn.readNetFromTensorflow((roslib.packages.get_pkg_dir(pkg_name) + '/models/frozen_inference_graph.pb'),
-                                      (roslib.packages.get_pkg_dir(pkg_name) + '/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt'))
+model = cv2.dnn.readNetFromTensorflow((roslib.packages.get_pkg_dir(pkg_name) + '/models/ssd_mobilenet_v3/frozen_inference_graph.pb'),
+                                      (roslib.packages.get_pkg_dir(pkg_name) + '/models/ssd_mobilenet_v3/ssd_mobilenet_v3_large_coco_2020_01_14.pbtxt'))
 
 class PubMsg():
     def __init__(self):
@@ -139,11 +157,15 @@ class DetectRed():
     def analysisBlob(self, binary_img):
         # 2値画像のラベリング処理
         # labelは画像のラベリング結果を保持している二次元配列
+        # label[0] ラベルの数
+        # label[1] ラベル番号が入った配列データ
+        # label[2] ラベリングされたオブジェクトの詳細情報(x, y, h, size), x, y, w, hは、オブジェクトの外形矩形の左上のx座標、y座標、高さ、幅
+        # label[3] オブジェクトの面積
         label = cv2.connectedComponentsWithStats(binary_img)
 
-        # ブロブ情報を項目別に抽出,背景は0としてラベリングされる
-        data = np.delete(label[2], 0, 0) # label[2]の0行目を削除する、0行目は背景のラベルが格納されている
-        center = np.delete(label[3], 0, 0)
+        # ブロブ情報を項目別に抽出,背景は0としてラベリングされるので削除
+        data = np.delete(label[2], 0, 0) 
+        center = np.delete(label[3], 0, 0) 
 
         # ブロブ面積最大のインデックス
         try:
@@ -251,6 +273,7 @@ class DetectRed():
             self.count += 1
             self.all_time += elapsed_time
             print(1/(self.all_time/self.count), "fps")
+            print("平均計算時間：", self.all_time/self.count)
             # 動画表示
             if ret:
                 if(self.debug):
