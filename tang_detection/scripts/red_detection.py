@@ -2,16 +2,12 @@
 # -*- coding: utf-8 -*-
 
 # 赤色の物体を検出後、位置を特定する
-# Service側
-#　
 
 import sys # sysはPythonのインタプリタや実行環境に関する情報を扱うためのライブラリです。
 import numpy as np
 import cv2
 import rospy
 from std_msgs.msg import String
-from tang_msgs.srv import SetSuccess
-from tang_detection.msg import Command
 
 delay = 1
 window_name = 'red detection'
@@ -36,9 +32,8 @@ class PubMsg():
 
 class DetectRed():
     def __init__(self):
-    
+        rospy.init_node('red_detection', anonymous=True)
         self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
-        self.publisher = rospy.Publisher('tang_cmd', Command, queue_size=1)
         self.pubmsg = PubMsg()
         if not self.video.isOpened():
             sys.exit()
@@ -86,65 +81,48 @@ class DetectRed():
         # video = self.readVideo()
         r = rospy.Rate(10) 
         ps = None
-        # while not rospy.is_shutdown():
-        ret, frame = self.video.read() # カメラの画像を１フレーム読み込み、frameに格納、retは読み込めたらtrueを格納する
-        if(not ret): 
-            print("error")
-            return
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = self.maskCalc(hsv)
-        # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
-        h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
-        # S, Vを2値化（大津の手法）
-        ret, s = cv2.threshold(hsv[:, :, 1], 0, 255,
-                           cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 1列目を抽出(s値)
-        ret, v = cv2.threshold(hsv[:, :, 2], 0, 255,
-                           cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 2列目を抽出(v値)
-         # s,vどちらかが0であれば、そのh[]の値を100にする、つまり赤色ではない色
-         # hの配列の中でTrueになった箇所だけを操作する
-        h[(s == 0) | (v == 0)] = 100
+        while not rospy.is_shutdown():
+            ret, frame = self.video.read() # カメラの画像を１フレーム読み込み、frameに格納、retは読み込めたらtrueを格納する
+            if(not ret): 
+                print("error")
+                continue
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            mask = self.maskCalc(hsv)
+            # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
+            h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
+            # S, Vを2値化（大津の手法）
+            ret, s = cv2.threshold(hsv[:, :, 1], 0, 255,
+                               cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 1列目を抽出(s値)
+            ret, v = cv2.threshold(hsv[:, :, 2], 0, 255,
+                               cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 2列目を抽出(v値)
+             # s,vどちらかが0であれば、そのh[]の値を100にする、つまり赤色ではない色
+             # hの配列の中でTrueになった箇所だけを操作する
+            h[(s == 0) | (v == 0)] = 100
 
-        # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
-        target = self.analysisBlob(mask)
-        if(target["area"] < min_area): return
+            # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
+            target = self.analysisBlob(mask)
+            if(target["area"] < min_area): continue
 
-         # 面積最大ブロブの中心座標を取得
-        center_x = int(target["center"][0])
-        center_y = int(target["center"][1])
-        radius = int((target["width"] + target["height"])/4)
-        # 中心座標、半径をpub
-        self.pubmsg.pub(center_x, radius)
+             # 面積最大ブロブの中心座標を取得
+            center_x = int(target["center"][0])
+            center_y = int(target["center"][1])
+            radius = int((target["width"] + target["height"])/4)
+            # 中心座標、半径をpub
+            self.pubmsg.pub(center_x, radius)
 
-        # フレームに面積最大ブロブの中心周囲を円で描く
-        cv2.circle(frame, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
-        cv2.circle(frame, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+            # フレームに面積最大ブロブの中心周囲を円で描く
+            cv2.circle(frame, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+            cv2.circle(frame, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
 
-        if ret:
-            cv2.imshow(window_name, frame)
-            cv2.imshow("masked_img", h)
-            if cv2.waitKey(delay) & 0xFF == ord('q'):
-                return
-        else:
-            self.video.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            print("cant show")
-        # r.sleep()
-    
-    def service_server(self, req):
-        is_set_success = True
-        # 赤検出開始
-        try:
-            # center_x, posを得られる
-            center_x, radius = self.detectRed()
-            # もし、閾値以上ならreq.setsucceed = true
-            if(radius >= 130 or radius <= 10):
-                is_set_success = False
-        except:
-            is_set_success = False
-        
-        # center_x, posをPub
-        # それ以外はPubしない
-
-
+            if ret:
+                cv2.imshow(window_name, frame)
+                cv2.imshow("masked_img", h)
+                if cv2.waitKey(delay) & 0xFF == ord('q'):
+                    break
+            else:
+                self.video.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                print("cant show")
+            # r.sleep()
 
 if __name__ == "__main__":
     detect_red = DetectRed()
