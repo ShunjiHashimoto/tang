@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 """
 @file rl_detectnet.py
 @brief 赤色の物体を検出かつ人を検知すれば追従
@@ -52,9 +51,8 @@ class PubMsg():
 class DetectNet():
     """
     @class DetectNet
-    @brief 説明(簡単)
+    @brief 人物検出&赤検出クラス
     """
-
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
         self.threshold = rospy.get_param("/tang_detection/threshold")

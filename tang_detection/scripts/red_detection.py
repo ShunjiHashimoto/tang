@@ -8,9 +8,12 @@ import numpy as np
 import cv2
 import rospy
 from std_msgs.msg import String
+import roslib.packages
+
 
 delay = 1
 window_name = 'red detection'
+pkg_name = 'tang_detection'
 min_area = 300
 
 class PubMsg():
@@ -33,7 +36,7 @@ class PubMsg():
 class DetectRed():
     def __init__(self):
         rospy.init_node('red_detection', anonymous=True)
-        self.video = cv2.VideoCapture(rospy.get_param("/tang_detection/video_path"))
+        self.video = cv2.VideoCapture(roslib.packages.get_pkg_dir(pkg_name) + rospy.get_param("/tang_detection/video_path"))
         self.pubmsg = PubMsg()
         if not self.video.isOpened():
             sys.exit()
