@@ -172,6 +172,7 @@ class TangController():
         elif(self.speed < 10):
             self.speed = 10
 
+        print("main", self.main)
         self.mode_pub.publish(self.main)	
         
 def main():

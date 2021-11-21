@@ -175,7 +175,7 @@ class DetectNet():
             pipeline.stop()
         
     def mode_callback(self, msg):
-        self.mode = msg
+        self.mode = msg.data
 
 
 if __name__ == "__main__":
