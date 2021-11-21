@@ -88,10 +88,10 @@ class DetectNet():
                 human_pos = detection.Center
                 self.command.is_human = 1
         # render the image
-        # self.output.Render(img)
+        self.output.Render(img)
         # # update the title bar
-        # self.output.SetStatus(
-        #     "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
+        self.output.SetStatus(
+             "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
         # exit on input/output EOS
         if not self.input.IsStreaming() or not self.output.IsStreaming():
             self.command.pos = human_pos[0]
