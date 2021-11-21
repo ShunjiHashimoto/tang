@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 @file rl_detectnet.py
-@brief 赤色の物体を検出かつ人を検知すれば追従
+@brief realsenseで背景処理を行い、人物を推定する
 """
 
 # detectnet
@@ -27,7 +27,6 @@ from std_msgs.msg import Int16
 WIDTH = 640
 HEIGHT = 480
 FPS = 60
-
 
 class PubMsg():
     """
@@ -68,10 +67,14 @@ class DetectNet():
         self.pubmsg = PubMsg()
         self.command = Command()
         self.mode = 0
+<<<<<<< HEAD
         self.joy_sub = rospy.Subscriber("current_mode", Int16, self.mode_callback, queue_size=1)
 
     def mode_callback(self, msg):
         self.mode = msg.data
+=======
+        self.joy_sub = rospy.Subscriber("current_mode", int, self.mode_callback, queue_size=1)
+>>>>>>> 21b31bc005d024010c920307c1ccc3f8f840c984
 
     def human_estimation(self, img):
         """
@@ -152,7 +155,10 @@ class DetectNet():
                 try:
                     if(self.mode == 1):
                         # 1 = humanmode
+<<<<<<< HEAD
                         rospy.loginfo("human_detection mode")
+=======
+>>>>>>> 21b31bc005d024010c920307c1ccc3f8f840c984
                         self.human_estimation(cuda_mem)
                         # 検出面積と位置によって動作を決定する
                         # rospy.loginfo("human pos : %d | detect_area: %f", human_pos[0], max_area)
@@ -165,7 +171,11 @@ class DetectNet():
                         pass
                     else:
                         # 0 = teleopmode
+<<<<<<< HEAD
                         rospy.loginfo("teleop mode")
+=======
+                        rospy.loginfo("human_detection mode")
+>>>>>>> 21b31bc005d024010c920307c1ccc3f8f840c984
                         pass
                 except:
                     rospy.logwarn("nothing target")
@@ -173,6 +183,9 @@ class DetectNet():
 
         finally:
             pipeline.stop()
+        
+    def mode_callback(self, msg):
+        self.mode = msg
 
 
 if __name__ == "__main__":

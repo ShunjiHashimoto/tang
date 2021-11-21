@@ -18,9 +18,6 @@ gpio_pin_l = 12
 # DIG1 = 11(LEFT), DIG2 = 12(RIGHT)
 GPIO.setup(gpio_pin_r, GPIO.OUT)
 GPIO.setup(gpio_pin_l, GPIO.OUT)
-# GPIOをLOWに設定
-# GPIO.output(gpio_pin_r, GPIO.LOW)
-# GPIO.output(gpio_pin_l, GPIO.LOW)
 
 output_pin_r = 33
 output_pin_l = 32
@@ -46,7 +43,7 @@ AXS_OFF = 0.0
 class TangController():
     def __init__(self):
         self.cmd = Command()
-	self.lcd = I2C_LCD_driver.lcd()
+        self.lcd = I2C_LCD_driver.lcd()
         self.btn = self.joy_l = self.joy_r = 0
         self.main = 0
         self.ref_pos = 350
@@ -55,26 +52,30 @@ class TangController():
         self.p_gain = 0.0027 * self.speed
         self.command = 0
 
-        # subscribe to motor messages on topic "msg_topic"
+        # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
         self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_Callback, queue_size=1)
    
         # subscribe to joystick messages on topic "joy"
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
+<<<<<<< HEAD
        
         # publisher
         self.mode_pub = rospy.Publisher('current_mode', Int16, queue_size=1)
 
+=======
+
+        # publisher
+        self.mode_pub = rospy.Publisher('current_mode', int, queue_size=1)
+        
+>>>>>>> 21b31bc005d024010c920307c1ccc3f8f840c984
     def modeChange(self):
         if self.main == 0:
-            ### old_teleop start 
-	    self.lcd.lcd_display_string("TANG",1)
-	    self.lcd.lcd_display_string("~ Teleop mode ~", 2)
+            ### teleop start 
+            self.lcd.lcd_display_string("TANG",1)
+            self.lcd.lcd_display_string("~ Teleop mode ~", 2)
             motor_l = self.joy_l
             motor_r = self.joy_r
             print(motor_r, motor_l)
-            # input_state_r = GPIO.input(gpio_pin_r)
-            # input_state_l = GPIO.input(gpio_pin_l)
-            # rospy.logwarn("input state r = %d | input state l = %d", input_state_r, input_state_l)
 
             time.sleep(0.1)
             
@@ -92,18 +93,13 @@ class TangController():
                 p_l.ChangeDutyCycle(-(motor_l))
                 # rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
             
-            # else:
-            #     rospy.loginfo("Stop! | motor_l : %d | motor_r: %d",
-            #                   motor_l, motor_r)
-            #     p_r.stop()
-            #     p_l.stop()
-            #     p_r.start(0)
-            #     p_l.start(0)
-
+            else:
+                pass
+        
         else:
-	    self.lcd.lcd_display_string("TANG", 1)
+            self.lcd.lcd_display_string("TANG", 1)
             self.lcd.lcd_display_string("~ Follow mode ~", 2)
-	    motor_r = motor_l = self.speed
+            motor_r = motor_l = self.speed
             if self.cmd.max_area == 0: return
             if (self.cmd.max_area >= self.max_area or self.cmd.is_human == 0):
                 rospy.logwarn("Stop")
@@ -124,7 +120,7 @@ class TangController():
             p_r.ChangeDutyCycle(motor_r)
             p_l.ChangeDutyCycle(motor_l)
             rospy.loginfo("motor_l %lf, motor_r %lf", motor_l, motor_r)
-
+        
     def p_control(self, cur_pos):
         """
         @fn p_control()
@@ -182,7 +178,12 @@ class TangController():
             self.speed = 100
         elif(self.speed < 10):
             self.speed = 10
+<<<<<<< HEAD
         self.mode_pub.publish(self.main)	
+=======
+            
+        self.mode_pub.publish(self.main)
+>>>>>>> 21b31bc005d024010c920307c1ccc3f8f840c984
 
 def main():
     # start node
