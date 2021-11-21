@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 @file rl_detectnet.py
-@brief 赤色の物体を検出かつ人を検知すれば追従
+@brief realsenseで背景処理を行い、人物を推定する
 """
 
 # detectnet
@@ -26,7 +26,6 @@ from tang_detection.msg import Command
 WIDTH = 640
 HEIGHT = 480
 FPS = 60
-
 
 class PubMsg():
     """
