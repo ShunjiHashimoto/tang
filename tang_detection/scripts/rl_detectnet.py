@@ -22,6 +22,7 @@ import roslib.packages
 import time
 import math
 from tang_detection.msg import Command
+from std_msgs.msg import Int16
 
 WIDTH = 640
 HEIGHT = 480
@@ -66,6 +67,11 @@ class DetectNet():
         self.input = jetson.utils.videoSource("/dev/video2")
         self.pubmsg = PubMsg()
         self.command = Command()
+        self.mode = 0
+        self.joy_sub = rospy.Subscriber("current_mode", Int16, self.mode_callback, queue_size=1)
+
+    def mode_callback(self, msg):
+        self.mode = msg.data
 
     def human_estimation(self, img):
         """
@@ -144,14 +150,25 @@ class DetectNet():
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
                 try:
-                    self.human_estimation(cuda_mem)
-                    # 検出面積と位置によって動作を決定する
-                    # rospy.loginfo("human pos : %d | detect_area: %f", human_pos[0], max_area)
-                    self.pubmsg.pub(self.command)
-                    # print(self.command)
-                    # rospy.logwarn("human detection")
+                    if(self.mode == 1):
+                        # 1 = humanmode
+                        rospy.loginfo("human_detection mode")
+                        self.human_estimation(cuda_mem)
+                        # 検出面積と位置によって動作を決定する
+                        # rospy.loginfo("human pos : %d | detect_area: %f", human_pos[0], max_area)
+                        self.pubmsg.pub(self.command)
+                        # print(self.command)
+                        # rospy.logwarn("human detection")
+                    elif(self.mode == 2):
+                        # 2 = redmode
+                        rospy.loginfo("red_detection mode")
+                        pass
+                    else:
+                        # 0 = teleopmode
+                        rospy.loginfo("teleop mode")
+                        pass
                 except:
-                    rospy.logwarn("nothing human")
+                    rospy.logwarn("nothing target")
                     continue
 
         finally:
