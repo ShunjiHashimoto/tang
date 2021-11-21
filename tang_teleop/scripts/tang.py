@@ -56,6 +56,9 @@ class TangController():
    
         # subscribe to joystick messages on topic "joy"
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
+
+        # publisher
+        self.mode_pub = rospy.Publisher('current_mode', int, queue_size=1)
         
     def modeChange(self):
         if self.main == 0:
@@ -167,6 +170,8 @@ class TangController():
             self.speed = 100
         elif(self.speed < 10):
             self.speed = 10
+            
+        self.mode_pub.publish(self.main)
 
 def main():
     # start node

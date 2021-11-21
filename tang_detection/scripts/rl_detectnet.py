@@ -65,6 +65,8 @@ class DetectNet():
         self.input = jetson.utils.videoSource("/dev/video2")
         self.pubmsg = PubMsg()
         self.command = Command()
+        self.mode = 0
+        self.joy_sub = rospy.Subscriber("current_mode", int, self.mode_callback, queue_size=1)
 
     def human_estimation(self, img):
         """
@@ -143,18 +145,31 @@ class DetectNet():
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
                 try:
-                    self.human_estimation(cuda_mem)
-                    # 検出面積と位置によって動作を決定する
-                    # rospy.loginfo("human pos : %d | detect_area: %f", human_pos[0], max_area)
-                    self.pubmsg.pub(self.command)
-                    # print(self.command)
-                    # rospy.logwarn("human detection")
+                    if(self.mode == 1):
+                        # 1 = humanmode
+                        self.human_estimation(cuda_mem)
+                        # 検出面積と位置によって動作を決定する
+                        # rospy.loginfo("human pos : %d | detect_area: %f", human_pos[0], max_area)
+                        self.pubmsg.pub(self.command)
+                        # print(self.command)
+                        # rospy.logwarn("human detection")
+                    elif(self.mode == 2):
+                        # 2 = redmode
+                        rospy.loginfo("red_detection mode")
+                        pass
+                    else:
+                        # 0 = teleopmode
+                        rospy.loginfo("human_detection mode")
+                        pass
                 except:
-                    rospy.logwarn("nothing human")
+                    rospy.logwarn("nothing target")
                     continue
 
         finally:
             pipeline.stop()
+        
+    def mode_callback(self, msg):
+        self.mode = msg
 
 
 if __name__ == "__main__":
