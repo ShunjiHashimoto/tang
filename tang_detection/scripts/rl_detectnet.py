@@ -23,6 +23,8 @@ import time
 import math
 from tang_detection.msg import Command
 from std_msgs.msg import Int16
+# 赤色検出モジュール
+import red_detection
 
 WIDTH = 640
 HEIGHT = 480
@@ -57,17 +59,16 @@ class DetectNet():
         rospy.init_node('human_detection', anonymous=True)
         self.threshold = rospy.get_param("/tang_detection/threshold")
         # create video output object
-        self.output = jetson.utils.videoOutput(
-            "display://0")
+        self.output = jetson.utils.videoOutput("display://0")
         # load the object detection network
-        self.net = jetson.inference.detectNet(
-            "ssd-mobilenet-v2", threshold=0.5)
+        self.net = jetson.inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
         # create video sources
         self.input = jetson.utils.videoSource("/dev/video2")
         self.pubmsg = PubMsg()
         self.command = Command()
-        self.mode = 1
+        self.detection_red = red_detection.DetectRed()
         self.joy_sub = rospy.Subscriber("current_mode", Int16, self.mode_callback, queue_size=1)
+        self.mode = 1
 
     def mode_callback(self, msg):
         self.mode = msg.data
@@ -150,7 +151,12 @@ class DetectNet():
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
                 try:
-                    if(self.mode == 1):
+                    if(self.mode == 0):
+                        # 0 = teleopmode
+                        rospy.loginfo("teleop mode")
+                        pass
+
+                    elif(self.mode == 1):
                         # 1 = humanmode
                         rospy.loginfo("human_detection mode")
                         self.human_estimation(cuda_mem)
@@ -159,14 +165,17 @@ class DetectNet():
                         self.pubmsg.pub(self.command)
                         # print(self.command)
                         # rospy.logwarn("human detection")
+
                     elif(self.mode == 2):
                         # 2 = redmode
                         rospy.loginfo("red_detection mode")
+                        self.command.pos, self.command.max_area = self.detection_red.red_detection(color_filtered_image, ret = 1)
+                        self.pubmsg.pub(self.command)
                         pass
+
                     else:
-                        # 0 = teleopmode
-                        rospy.loginfo("teleop mode")
                         pass
+                        
                 except:
                     rospy.logwarn("nothing target")
                     continue
