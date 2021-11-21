@@ -7,6 +7,7 @@ import RPi.GPIO as GPIO
 import I2C_LCD_driver
 from sensor_msgs.msg import Joy
 from tang_detection.msg import Command
+from std_msgs.msg import Int16
 
 # modeを選択
 GPIO.setmode(GPIO.BOARD)
@@ -59,7 +60,10 @@ class TangController():
    
         # subscribe to joystick messages on topic "joy"
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
-        
+       
+        # publisher
+        self.mode_pub = rospy.Publisher('current_mode', Int16, queue_size=1)
+
     def modeChange(self):
         if self.main == 0:
             ### old_teleop start 
@@ -178,6 +182,7 @@ class TangController():
             self.speed = 100
         elif(self.speed < 10):
             self.speed = 10
+        self.mode_pub.publish(self.main)	
 
 def main():
     # start node
