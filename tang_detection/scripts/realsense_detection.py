@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 @file rl_detectnet.py
-@brief realsenseで背景処理を行い、人物を推定する
+@brief realsenseで背景処理を行い、人物を推定する、また赤色検出を行う
 """
 
 # detectnet
@@ -10,21 +10,27 @@ import jetson.inference
 import jetson.utils
 import argparse
 
+# ros
+import rospy
+import roslib.packages
+from tang_detection.msg import Command
+from std_msgs.msg import Int16
+from std_msgs.msg import String
+from sensor_msgs.msg import Joy
+
+# 赤色検出モジュール
+import red_detection
+
+# realsense
+import pyrealsense2 as rs
+
+# others
 import sys
 import numpy as np
 from numpy.lib.function_base import copy
 import cv2
-import rospy
-from std_msgs.msg import String
-from sensor_msgs.msg import Joy
-import pyrealsense2 as rs
-import roslib.packages
 import time
 import math
-from tang_detection.msg import Command
-from std_msgs.msg import Int16
-# 赤色検出モジュール
-import red_detection
 
 WIDTH = 640
 HEIGHT = 480
@@ -33,7 +39,7 @@ FPS = 60
 class PubMsg():
     """
     @class PubMsg
-    @brief 説明(簡単)
+    @brief 目標位置と物体の大きさをPub
     """
 
     def __init__(self):
@@ -45,7 +51,6 @@ class PubMsg():
         @fn pub()
         @details 検出した人の位置と大きさをpub
         """
-        # max_area = 220417
         self.command = cmd
         self.publisher.publish(self.command)
 
@@ -55,20 +60,24 @@ class DetectNet():
     @class DetectNet
     @brief 人物検出&赤検出クラス
     """
+
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
         self.threshold = rospy.get_param("/tang_detection/threshold")
+        self.mode = 0
         # create video output object
         self.output = jetson.utils.videoOutput("display://0")
         # load the object detection network
         self.net = jetson.inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
         # create video sources
         self.input = jetson.utils.videoSource("/dev/video2")
+        # publisher
         self.pubmsg = PubMsg()
+        # subscriber
+        self.joy_sub = rospy.Subscriber("current_mode", Int16, self.mode_callback, queue_size=1)
+        # msg type
         self.command = Command()
         self.detection_red = red_detection.DetectRed()
-        self.joy_sub = rospy.Subscriber("current_mode", Int16, self.mode_callback, queue_size=1)
-        self.mode = 1
 
     def mode_callback(self, msg):
         self.mode = msg.data
@@ -95,8 +104,7 @@ class DetectNet():
         # render the image
         self.output.Render(img)
         # # update the title bar
-        self.output.SetStatus(
-             "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
+        self.output.SetStatus("Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
         # exit on input/output EOS
         if not self.input.IsStreaming() or not self.output.IsStreaming():
             self.command.pos = human_pos[0]
@@ -114,7 +122,6 @@ class DetectNet():
                              HEIGHT, rs.format.bgr8, FPS)
         config.enable_stream(rs.stream.depth, WIDTH,
                              HEIGHT, rs.format.z16, FPS)
-
         pipeline = rs.pipeline()
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
