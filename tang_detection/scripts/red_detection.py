@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 # 赤色の物体を検出後、位置を特定する
-
 import sys 
 import numpy as np
 import cv2
@@ -25,7 +23,12 @@ class DetectRed():
     def __init__(self):
         pass
 
-    def maskCalc(self, hsv):
+    def mask_calc(self, hsv):
+        """
+        @fn mask_calc()
+        @param hsv hsv値で表現された画像
+        @details 赤色とそれ以外で二値化
+        """
         # 赤色のHSVの値域1
         hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
         hsv_max = np.array([6,255,255])
@@ -40,7 +43,12 @@ class DetectRed():
         return(mask1 + mask2)
 
     # ブロブ解析
-    def analysisBlob(self, binary_img):
+    def analysis_blob(self, binary_img):
+        """
+        @fn analysis_blob()
+        @param binary_img 二値化された画像
+        @details 最も大きい面積の位置情報と大きさを取得
+        """
         # 2値画像のラベリング処理
         # labelは画像のラベリング結果を保持している二次元配列
         label = cv2.connectedComponentsWithStats(binary_img)
@@ -72,7 +80,7 @@ class DetectRed():
         """
         r = rospy.Rate(10) 
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = self.maskCalc(hsv)
+        mask = self.mask_calc(hsv)
         # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
         h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
         # S, Vを2値化（大津の手法）
@@ -85,7 +93,7 @@ class DetectRed():
         h[(s == 0) | (v == 0)] = 100
 
         # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
-        target = self.analysisBlob(mask)
+        target = self.analysis_blob(mask)
         if(target["area"] < min_area): return
 
          # 面積最大ブロブの中心座標を取得
@@ -98,8 +106,8 @@ class DetectRed():
         cv2.circle(frame, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
 
         if ret:
-            # cv2.imshow(window_name, frame)
-            # cv2.imshow("masked_img", h)
+            cv2.imshow(window_name, frame)
+            cv2.imshow("masked_img", h)
             if cv2.waitKey(delay) & 0xFF == ord('q'):
                 return
             return center_x, radius
