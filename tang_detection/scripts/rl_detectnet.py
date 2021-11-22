@@ -119,6 +119,7 @@ class DetectNet():
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
         max_dist = self.threshold/depth_scale
+        r = rospy.Rate(10) # 10hz
 
         try:
             while not rospy.is_shutdown():
@@ -154,24 +155,22 @@ class DetectNet():
                     if(self.mode == 0):
                         # 0 = teleopmode
                         rospy.loginfo("teleop mode")
+                        r.sleep()
                         pass
 
                     elif(self.mode == 1):
                         # 1 = humanmode
                         rospy.loginfo("human_detection mode")
                         self.human_estimation(cuda_mem)
-                        # 検出面積と位置によって動作を決定する
-                        # rospy.loginfo("human pos : %d | detect_area: %f", human_pos[0], max_area)
                         self.pubmsg.pub(self.command)
-                        # print(self.command)
-                        # rospy.logwarn("human detection")
+                        r.sleep()
 
                     elif(self.mode == 2):
                         # 2 = redmode
                         rospy.loginfo("red_detection mode")
                         self.command.pos, self.command.max_area = self.detection_red.red_detection(color_filtered_image, ret = 1)
                         self.pubmsg.pub(self.command)
-                        print(self.command.pos, self.command.max_area)
+                        r.sleep()
                         pass
 
                     else:

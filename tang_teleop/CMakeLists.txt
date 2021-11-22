@@ -19,7 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
 #  INCLUDE_DIRS include
-  LIBRARIES cubase
+  LIBRARIES tang_bringup
   CATKIN_DEPENDS roscpp rospy std_msgs
   DEPENDS system_lib
 )
