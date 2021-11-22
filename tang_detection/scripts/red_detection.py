@@ -3,7 +3,7 @@
 
 # 赤色の物体を検出後、位置を特定する
 
-import sys # sysはPythonのインタプリタや実行環境に関する情報を扱うためのライブラリです。
+import sys 
 import numpy as np
 import cv2
 import rospy
@@ -16,23 +16,6 @@ delay = 1
 window_name = 'red detection'
 pkg_name = 'tang_detection'
 min_area = 300
-
-# class PubMsg():
-#     def __init__(self):
-#         self.publisher = rospy.Publisher('msg_topic', String, queue_size=10)
-
-#     def pub(self, center_x, radius):
-#         if(0 <= center_x and center_x <= 240 and radius < 130):
-#             str = "turn left"
-#         elif(400 < center_x and center_x <= 640 and radius < 130):
-#             str = "turn right"
-#         else:
-#             if(radius >= 130 or radius <= 10):
-#                 str = "stop"
-#             else:
-#                 str = "go ahead"
-#         rospy.loginfo(str)
-#         self.publisher.publish(str)
 
 class DetectRed():
     """
@@ -109,9 +92,6 @@ class DetectRed():
         center_x = int(target["center"][0])
         center_y = int(target["center"][1])
         radius = int((target["width"] + target["height"])/4)
-
-        # 中心座標、半径をpub
-        # self.pubmsg.pub(center_x, radius)
 
         # フレームに面積最大ブロブの中心周囲を円で描く
         cv2.circle(frame, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
