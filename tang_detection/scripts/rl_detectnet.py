@@ -171,6 +171,7 @@ class DetectNet():
                         rospy.loginfo("red_detection mode")
                         self.command.pos, self.command.max_area = self.detection_red.red_detection(color_filtered_image, ret = 1)
                         self.pubmsg.pub(self.command)
+                        print(self.command.pos, self.command.max_area)
                         pass
 
                     else:
