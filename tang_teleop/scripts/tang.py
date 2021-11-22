@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import rospy
 import time
 import RPi.GPIO as GPIO
@@ -54,17 +53,14 @@ class TangController():
         self.command = 0
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
-        self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_Callback, queue_size=1)
-   
+        self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_callback, queue_size=1)
         # subscribe to joystick messages on topic "joy"
-        self.joy_sub = rospy.Subscriber("joy", Joy, self.joyCallback, queue_size=1)
-       
+        self.joy_sub = rospy.Subscriber("joy", Joy, self.joy_callback, queue_size=1)
         # publisher
         self.mode_pub = rospy.Publisher('current_mode', Int16, queue_size=1)
 
-    def modeChange(self):
+    def mode_change(self):
         if self.main == 0:
-            ### teleop start 
             self.lcd.lcd_display_string("TANG",1)
             self.lcd.lcd_display_string("~ Teleop mode ~", 2)
             motor_l = self.joy_l
@@ -121,7 +117,6 @@ class TangController():
             elif (self.command >= 0):
                 motor_l -= self.command
                 rospy.loginfo("AN1, left, 33pin, motor_l is up | Turn Right!")
-            # rospy.logwarn(self.cmd.max_area)
             GPIO.output(gpio_pin_r, GPIO.HIGH)
             GPIO.output(gpio_pin_l, GPIO.HIGH)
             p_r.ChangeDutyCycle(motor_r)
@@ -136,7 +131,7 @@ class TangController():
         """
         return self.p_gain * (self.ref_pos - cur_pos)
     
-    def cmd_Callback(self, msg):
+    def cmd_callback(self, msg):
         # 人の位置とサイズを得る
         self.cmd = msg
         self.command = self.p_control(self.cmd.pos)
@@ -144,9 +139,9 @@ class TangController():
             self.command = 0
         # rospy.logwarn("Command: %lf", self.command)
         
-    def joyCallback(self, joy_msg):
+    def joy_callback(self, joy_msg):
         newbtn = 0
-        
+
         if(joy_msg.buttons[6]):
             newbtn |= BTN_BACK
         elif(joy_msg.buttons[0]):
@@ -195,7 +190,7 @@ def main():
     instance = TangController()
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
-        instance.modeChange()
+        instance.mode_change()
         rate.sleep()
     rospy.spin()
                 
