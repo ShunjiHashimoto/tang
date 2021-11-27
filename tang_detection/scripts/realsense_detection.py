@@ -64,7 +64,7 @@ class DetectNet():
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
         self.threshold = rospy.get_param("/tang_detection/threshold")
-        self.mode = 0
+        self.mode = 1
         # create video output object
         self.output = jetson.utils.videoOutput("display://0")
         # load the object detection network
@@ -176,6 +176,7 @@ class DetectNet():
                         # 2 = redmode
                         rospy.loginfo("red_detection mode")
                         self.command.pos, self.command.max_area = self.detection_red.red_detection(color_filtered_image, ret = 1)
+                        print(self.command.max_area)
                         self.pubmsg.pub(self.command)
                         r.sleep()
                         pass
