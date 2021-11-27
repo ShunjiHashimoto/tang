@@ -108,7 +108,7 @@ class TangController():
             # self.lcd.lcd_display_string("~ Red mode ~", 2)
             motor_r = motor_l = self.speed
             if self.cmd.max_area == 0: return
-            if (self.cmd.max_area >= self.max_area_red or self.cmd.max_area < 10):
+            if (self.cmd.max_area >= self.max_area_red or self.cmd.max_area < 60):
                 rospy.logwarn("Stop")
                 motor_r = motor_l = 0
             elif (self.command < 0):
