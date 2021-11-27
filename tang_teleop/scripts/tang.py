@@ -3,23 +3,23 @@
 import rospy
 import time
 import RPi.GPIO as GPIO
-import I2C_LCD_driver
+# import I2C_LCD_driver
 from sensor_msgs.msg import Joy
 from tang_detection.msg import Command
 from std_msgs.msg import Int16
 
 # modeを選択
-GPIO.setmode(GPIO.BOARD)
+GPIO.setmode(GPIO.BCM)
 
-gpio_pin_r = 31
-gpio_pin_l = 12
+gpio_pin_r = 18
+gpio_pin_l = 17
 # デジタル出力ピンを設定, 回転方向を決められる
 # DIG1 = 11(LEFT), DIG2 = 12(RIGHT)
 GPIO.setup(gpio_pin_r, GPIO.OUT)
 GPIO.setup(gpio_pin_l, GPIO.OUT)
 
-output_pin_r = 33
-output_pin_l = 32
+output_pin_r = 12
+output_pin_l = 13
 # アナログ出力ピンを設定、output_pinを32,33に設定
 # ANA1 = 32(LEFT), ANA2 = 33(RIGHT)
 GPIO.setup(output_pin_r, GPIO.OUT)
@@ -42,7 +42,7 @@ AXS_OFF = 0.0
 class TangController():
     def __init__(self):
         self.cmd = Command()
-        self.lcd = I2C_LCD_driver.lcd()
+        # self.lcd = I2C_LCD_driver.lcd()
         self.btn = self.joy_l = self.joy_r = 0
         self.main = 0
         self.ref_pos = 350
@@ -61,8 +61,8 @@ class TangController():
 
     def mode_change(self):
         if self.main == 0:
-            self.lcd.lcd_display_string("TANG",1)
-            self.lcd.lcd_display_string("~ Teleop mode ~", 2)
+            # self.lcd.lcd_display_string("TANG",1)
+            # self.lcd.lcd_display_string("~ Teleop mode ~", 2)
             motor_l = self.joy_l
             motor_r = self.joy_r
             print(motor_r, motor_l)
@@ -83,8 +83,8 @@ class TangController():
                 pass
         
         elif self.main == 1:
-            self.lcd.lcd_display_string("TANG", 1)
-            self.lcd.lcd_display_string("~ Follow mode ~", 2)
+            # self.lcd.lcd_display_string("TANG", 1)
+            # self.lcd.lcd_display_string("~ Follow mode ~", 2)
             motor_r = motor_l = self.speed
             if self.cmd.max_area == 0: return
             if (self.cmd.max_area >= self.max_area or self.cmd.is_human == 0):
@@ -104,8 +104,8 @@ class TangController():
             rospy.loginfo("motor_l %lf, motor_r %lf", motor_l, motor_r)
     
         elif self.main == 2:
-            self.lcd.lcd_display_string("TANG", 1)
-            self.lcd.lcd_display_string("~ Red mode ~", 2)
+            # self.lcd.lcd_display_string("TANG", 1)
+            # self.lcd.lcd_display_string("~ Red mode ~", 2)
             motor_r = motor_l = self.speed
             if self.cmd.max_area == 0: return
             if (self.cmd.max_area >= self.max_area_red or self.cmd.max_area < 10):
