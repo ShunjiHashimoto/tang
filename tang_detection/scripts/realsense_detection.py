@@ -102,9 +102,9 @@ class DetectNet():
                 human_pos = detection.Center
                 self.command.is_human = 1
         # render the image
-        self.output.Render(img)
+        # self.output.Render(img)
         # # update the title bar
-        self.output.SetStatus("Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
+        # self.output.SetStatus("Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
         # exit on input/output EOS
         if not self.input.IsStreaming() or not self.output.IsStreaming():
             self.command.pos = human_pos[0]
@@ -148,8 +148,8 @@ class DetectNet():
                 # 指定距離以上を無視した深度画像
                 depth_image = np.asanyarray(depth_frame.get_data())
                 depth_filtered_image = (depth_image < max_dist) * depth_image
-                depth_gray_filtered_image = (
-                    depth_filtered_image * 255. / max_dist).reshape((HEIGHT, WIDTH)).astype(np.uint8)
+                # depth_gray_filtered_image = (
+                #     depth_filtered_image * 255. / max_dist).reshape((HEIGHT, WIDTH)).astype(np.uint8)
 
                 # 指定距離以上を無視したRGB画像
                 # realsense側の型を調べる -> <class 'numpy.ndarray'>
