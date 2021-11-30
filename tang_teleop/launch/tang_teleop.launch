@@ -4,7 +4,10 @@
     <param name="deadzone" value="0.12" />
   </node>
 
-  <!-- <node name="tang_teleop" pkg="tang_teleop" type="tang_teleop.py" output="screen">
-  </node> -->
+  <node name="tang_teleop" pkg="tang_teleop" type="tang.py" output="screen">
+    <param name = "max_area" type = "int" value = "130000"/> 
+    <param name = "max_area_red" type = "int" value = "167"/> 
+    <param name = "speed" type = "int" value = "30"/>
+  </node>
 
 </launch>
