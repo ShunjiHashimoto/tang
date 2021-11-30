@@ -1,0 +1,9 @@
+<launch>
+
+  <node name="tang_detection" pkg="tang_detection" type="test.py" output="screen">
+    <param name = "video_path" value = "/videos/original.mp4"/> 
+    <!-- <param name = "video_path" value = "0"/>  -->
+    <param name = "debug" type="bool" value="1"/>
+  </node>
+
+</launch>
