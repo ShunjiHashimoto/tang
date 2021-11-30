@@ -3,7 +3,6 @@
 import rospy
 import time
 import RPi.GPIO as GPIO
-# import I2C_LCD_driver
 from sensor_msgs.msg import Joy
 from tang_detection.msg import Command
 from std_msgs.msg import Int16
@@ -42,7 +41,6 @@ AXS_OFF = 0.0
 class TangController():
     def __init__(self):
         self.cmd = Command()
-        # self.lcd = I2C_LCD_driver.lcd()
         self.btn = self.joy_l = self.joy_r = 0
         self.main = 0
         self.ref_pos = 350
@@ -61,8 +59,6 @@ class TangController():
 
     def mode_change(self):
         if self.main == 0:
-            # self.lcd.lcd_display_string("TANG",1)
-            # self.lcd.lcd_display_string("~ Teleop mode ~", 2)
             motor_l = self.joy_l
             motor_r = self.joy_r
             print(motor_r, motor_l)
@@ -83,8 +79,6 @@ class TangController():
                 pass
         
         elif self.main == 1:
-            # self.lcd.lcd_display_string("TANG", 1)
-            # self.lcd.lcd_display_string("~ Follow mode ~", 2)
             motor_r = motor_l = self.speed
             if self.cmd.max_area == 0: return
             if (self.cmd.max_area >= self.max_area or self.cmd.is_human == 0):
@@ -104,8 +98,6 @@ class TangController():
             rospy.loginfo("motor_l %lf, motor_r %lf", motor_l, motor_r)
     
         elif self.main == 2:
-            # self.lcd.lcd_display_string("TANG", 1)
-            # self.lcd.lcd_display_string("~ Red mode ~", 2)
             motor_r = motor_l = self.speed
             if self.cmd.max_area == 0: return
             if (self.cmd.max_area >= self.max_area_red or self.cmd.max_area < 60):
@@ -171,7 +163,7 @@ class TangController():
         push = ((~self.btn) & newbtn)
         self.btn = newbtn
         if(push & BTN_BACK):
-            self.main = (self.main + 1)%3
+            self.main = (self.main + 1)%4
         elif(push & BTN_Y):
             self.speed += 10
         elif(push & BTN_A):

@@ -15,8 +15,9 @@ import rospy
 import roslib.packages
 from tang_detection.msg import Command
 from std_msgs.msg import Int16
-from std_msgs.msg import String
 from sensor_msgs.msg import Joy
+import I2C_LCD_driver
+
 
 # 赤色検出モジュール
 import red_detection
@@ -78,6 +79,8 @@ class DetectNet():
         # msg type
         self.command = Command()
         self.detection_red = red_detection.DetectRed()
+        # lcd module
+        self.lcd = I2C_LCD_driver.lcd()
 
     def mode_callback(self, msg):
         self.mode = msg.data
@@ -106,8 +109,8 @@ class DetectNet():
         # # update the title bar
         # self.output.SetStatus("Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
         # exit on input/output EOS
-        if not self.input.IsStreaming() or not self.output.IsStreaming():
-            self.command.pos = human_pos[0]
+        if not self.input.IsStreaming():
+            self.command.pos = human_pos
             self.command.max_area = max_area
         return
 
@@ -115,6 +118,7 @@ class DetectNet():
         """
         @fn main_loop()
         @brief 背景処理後、numpyからcuda_imgに変換、人物検出を行う
+        joyから距離のthreshholdを変更できるようにしたい
         """
         align = rs.align(rs.stream.color)
         config = rs.config()
@@ -161,24 +165,35 @@ class DetectNet():
                 try:
                     if(self.mode == 0):
                         # 0 = teleopmode
-                        rospy.loginfo("teleop mode")
+                        # rospy.loginfo("teleop mode")
+                        self.lcd.lcd_display_string("TANG",1)
+                        self.lcd.lcd_display_string("~ Teleop mode ~", 2)
                         r.sleep()
                         pass
 
                     elif(self.mode == 1):
                         # 1 = humanmode
-                        rospy.loginfo("human_detection mode")
+                        self.lcd.lcd_display_string("TANG", 1)
+                        self.lcd.lcd_display_string("~ Follow mode ~", 2)
+                        # rospy.loginfo("human_detection mode")
                         self.human_estimation(cuda_mem)
                         self.pubmsg.pub(self.command)
                         r.sleep()
 
                     elif(self.mode == 2):
                         # 2 = redmode
-                        rospy.loginfo("red_detection mode")
+                        self.lcd.lcd_display_string("TANG", 1)
+                        self.lcd.lcd_display_string("~ Red mode ~", 2)
+                        # rospy.loginfo("red_detection mode")
                         self.command.pos, self.command.max_area = self.detection_red.red_detection(color_filtered_image, ret = 1)
                         print(self.command.max_area)
                         self.pubmsg.pub(self.command)
                         r.sleep()
+                        pass
+                   
+                    elif(self.mode == 3):
+                        # 2 = redmode
+                        self.lcd.lcd_display_string("~ Ajust mode ~", 2)                        r.sleep()
                         pass
 
                     else:
