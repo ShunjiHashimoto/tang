@@ -14,6 +14,7 @@ import argparse
 import rospy
 import roslib.packages
 from tang_detection.msg import Command
+from tang_teleop.msg import Modechange
 from std_msgs.msg import Int16
 from sensor_msgs.msg import Joy
 import I2C_LCD_driver
@@ -65,7 +66,7 @@ class DetectNet():
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
         self.threshold = rospy.get_param("/tang_detection/threshold")
-        self.mode = 1
+        # self.mode = 1
         # create video output object
         self.output = jetson.utils.videoOutput("display://0")
         # load the object detection network
@@ -75,16 +76,18 @@ class DetectNet():
         # publisher
         self.pubmsg = PubMsg()
         # subscriber
-        self.joy_sub = rospy.Subscriber("current_mode", Int16, self.mode_callback, queue_size=1)
+        self.joy_sub = rospy.Subscriber("current_param", Modechange, self.mode_callback, queue_size=1)
         # msg type
         self.command = Command()
         self.detection_red = red_detection.DetectRed()
         # lcd module
         self.lcd = I2C_LCD_driver.lcd()
+        self.param = Modechange()
+        self.param.current_mode = 3
 
     def mode_callback(self, msg):
-        self.mode = msg.data
-        print(self.mode)
+        self.param = msg
+        # print(self.mode)
 
     def human_estimation(self, img):
         """
@@ -163,7 +166,7 @@ class DetectNet():
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
                 try:
-                    if(self.mode == 0):
+                    if(self.param.current_mode == 0):
                         # 0 = teleopmode
                         # rospy.loginfo("teleop mode")
                         self.lcd.lcd_display_string("TANG",1)
@@ -171,7 +174,7 @@ class DetectNet():
                         r.sleep()
                         pass
 
-                    elif(self.mode == 1):
+                    elif(self.param.current_mode == 1):
                         # 1 = humanmode
                         self.lcd.lcd_display_string("TANG", 1)
                         self.lcd.lcd_display_string("~ Follow mode ~", 2)
@@ -180,7 +183,7 @@ class DetectNet():
                         self.pubmsg.pub(self.command)
                         r.sleep()
 
-                    elif(self.mode == 2):
+                    elif(self.param.current_mode == 2):
                         # 2 = redmode
                         self.lcd.lcd_display_string("TANG", 1)
                         self.lcd.lcd_display_string("~ Red mode ~", 2)
@@ -191,9 +194,12 @@ class DetectNet():
                         r.sleep()
                         pass
                    
-                    elif(self.mode == 3):
+                    elif(self.param.current_mode == 3):
                         # 2 = redmode
-                        self.lcd.lcd_display_string("~ Ajust mode ~", 2)                        r.sleep()
+                        self.lcd.lcd_display_string("~ Ajust mode ~", 1)
+                        # self.lcd.lcd_display_string("~ Red mode ~", 2)
+                                          
+                        r.sleep()
                         pass
 
                     else:
@@ -205,9 +211,6 @@ class DetectNet():
 
         finally:
             pipeline.stop()
-        
-    def mode_callback(self, msg):
-        self.mode = msg.data
 
 
 if __name__ == "__main__":

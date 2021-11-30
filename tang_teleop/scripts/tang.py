@@ -6,6 +6,7 @@ import RPi.GPIO as GPIO
 from sensor_msgs.msg import Joy
 from tang_detection.msg import Command
 from std_msgs.msg import Int16
+from tang_teleop.msg import Modechange
 
 # modeを選択
 GPIO.setmode(GPIO.BCM)
@@ -42,6 +43,7 @@ class TangController():
     def __init__(self):
         self.cmd = Command()
         self.btn = self.joy_l = self.joy_r = 0
+        self.current_param = Modechange()
         self.main = 0
         self.ref_pos = 350
         self.max_area = rospy.get_param("/tang_teleop/max_area")
@@ -54,8 +56,8 @@ class TangController():
         self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_callback, queue_size=1)
         # subscribe to joystick messages on topic "joy"
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joy_callback, queue_size=1)
-        # publisher
-        self.mode_pub = rospy.Publisher('current_mode', Int16, queue_size=1)
+        # publisher, モードと距離の閾値、赤色検出の閾値をpub
+        self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
 
     def mode_change(self):
         if self.main == 0:
@@ -174,7 +176,8 @@ class TangController():
         elif(self.speed < 10):
             self.speed = 10
 
-        self.mode_pub.publish(self.main)	
+        self.current_param.current_mode = self.main
+        self.mode_pub.publish(self.current_param)	
         
 def main():
     # start node
