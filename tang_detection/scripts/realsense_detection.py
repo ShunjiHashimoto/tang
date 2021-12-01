@@ -132,11 +132,13 @@ class DetectNet():
         pipeline = rs.pipeline()
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
-        max_dist = self.threshold/depth_scale
         r = rospy.Rate(10) # 10hz
 
         try:
             while not rospy.is_shutdown():
+                # realsensenの認識距離設定
+                self.threshold += self.param.realsense_thresh
+                max_dist = self.threshold/depth_scale
                 # フレーム取得
                 frames = pipeline.wait_for_frames()
                 aligned_frames = align.process(frames)

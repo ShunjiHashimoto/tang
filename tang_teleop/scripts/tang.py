@@ -134,7 +134,12 @@ class TangController():
         # rospy.logwarn("Command: %lf", self.command)
         
     def joy_callback(self, joy_msg):
+        # button[5]で上がる、button[4]で下がる、realsenseの認識距離変更
         newbtn = 0
+        self.current_param.realsense_thresh += joy_msg.buttons[5]/4
+        self.current_param.realsense_thresh -= joy_msg.buttons[5]/4
+        if(self.current_param.realsense_thresh<0.5):
+            self.current_param.realsense_thresh = 0.5
 
         if(joy_msg.buttons[6]):
             newbtn |= BTN_BACK
