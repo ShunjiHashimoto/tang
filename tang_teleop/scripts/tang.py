@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import rospy
+# import sys
 import time
 import RPi.GPIO as GPIO
 from sensor_msgs.msg import Joy
@@ -136,10 +137,14 @@ class TangController():
     def joy_callback(self, joy_msg):
         # button[5]で上がる、button[4]で下がる、realsenseの認識距離変更
         newbtn = 0
-        self.current_param.realsense_thresh += joy_msg.buttons[5]/4
-        self.current_param.realsense_thresh -= joy_msg.buttons[5]/4
-        if(self.current_param.realsense_thresh<0.5):
-            self.current_param.realsense_thresh = 0.5
+        max_thresh = 4.0
+        min_thresh = -2.0
+        self.current_param.realsense_thresh += float(joy_msg.buttons[5])/5
+        self.current_param.realsense_thresh -= float(joy_msg.buttons[4])/5
+        if(max_thresh < self.current_param.realsense_thresh):
+            self.current_param.realsense_thresh -= 0.2
+        elif(min_thresh > self.current_param.realsense_thresh):
+            self.current_param.realsense_thresh += 0.2
 
         if(joy_msg.buttons[6]):
             newbtn |= BTN_BACK
