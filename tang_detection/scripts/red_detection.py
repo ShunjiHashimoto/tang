@@ -29,7 +29,7 @@ class DetectRed():
         @param hsv hsv値で表現された画像
         @details 赤色とそれ以外で二値化
         """
-        # 赤色のHSVの値域1
+        # 赤色のHSVの値域1(hはもとは9~30らしい)
         hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
         hsv_max = np.array([6,255,255])
         mask1 = cv2.inRange(hsv, hsv_min, hsv_max)

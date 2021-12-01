@@ -175,7 +175,7 @@ class TangController():
         push = ((~self.btn) & newbtn)
         self.btn = newbtn
         if(push & BTN_BACK):
-            self.main = (self.main + 1)%4
+            self.main = (self.main + 1)%3
         elif(push & BTN_Y):
             self.speed += 10
         elif(push & BTN_A):

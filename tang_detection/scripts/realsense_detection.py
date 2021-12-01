@@ -178,8 +178,8 @@ class DetectNet():
 
                     elif(self.param.current_mode == 1):
                         # 1 = humanmode
-                        self.lcd.lcd_display_string("TANG", 1)
-                        self.lcd.lcd_display_string("~ Follow mode ~", 2)
+                        self.lcd.lcd_display_string("~ Follow mode ~", 1)
+                        self.lcd.lcd_display_string(str(self.threshold), 2)
                         # rospy.loginfo("human_detection mode")
                         self.human_estimation(cuda_mem)
                         self.pubmsg.pub(self.command)
@@ -195,15 +195,7 @@ class DetectNet():
                         self.pubmsg.pub(self.command)
                         r.sleep()
                         pass
-                   
-                    elif(self.param.current_mode == 3):
-                        # 2 = redmode
-                        self.lcd.lcd_display_string("~ Ajust mode ~", 1)
-                        # self.lcd.lcd_display_string("~ Red mode ~", 2)
-                                          
-                        r.sleep()
-                        pass
-
+                
                     else:
                         pass
                         
