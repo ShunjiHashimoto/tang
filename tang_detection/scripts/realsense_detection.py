@@ -65,8 +65,9 @@ class DetectNet():
 
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
-        self.threshold = rospy.get_param("/tang_detection/threshold")
-        # self.mode = 1
+        # self.threshold = rospy.get_param("/tang_detection/threshold")
+        self.threshold = 2.0
+	# self.mode = 1
         # create video output object
         self.output = jetson.utils.videoOutput("display://0")
         # load the object detection network
@@ -137,7 +138,8 @@ class DetectNet():
         try:
             while not rospy.is_shutdown():
                 # realsensenの認識距離設定
-                self.threshold += self.param.realsense_thresh
+                self.threshold = self.param.realsense_thresh
+                print(self.param.realsense_thresh)
                 max_dist = self.threshold/depth_scale
                 # フレーム取得
                 frames = pipeline.wait_for_frames()
