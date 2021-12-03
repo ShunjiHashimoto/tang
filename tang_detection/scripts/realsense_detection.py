@@ -113,7 +113,7 @@ class DetectNet():
         # self.output.SetStatus("Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
         # exit on input/output EOS
         if not self.input.IsStreaming():
-            self.command.pos = human_pos
+            self.command.pos = human_pos[0]
             self.command.max_area = max_area
         return
 
@@ -179,11 +179,12 @@ class DetectNet():
                     elif(self.param.current_mode == 1):
                         # 1 = humanmode
                         self.lcd.lcd_display_string("~ Follow mode ~", 1)
-                        self.lcd.lcd_display_string(str(self.threshold), 2)
+                        self.lcd.lcd_display_string("thresh = " + str(self.threshold), 2)
                         # rospy.loginfo("human_detection mode")
                         self.human_estimation(cuda_mem)
                         self.pubmsg.pub(self.command)
                         r.sleep()
+                        pass
 
                     elif(self.param.current_mode == 2):
                         # 2 = redmode
