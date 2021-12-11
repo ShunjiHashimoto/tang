@@ -43,15 +43,17 @@ AXS_OFF = 0.0
 class TangController():
     def __init__(self):
         self.cmd = Command()
+        self.cmd.depth_thresh = 3.0
         self.btn = self.joy_l = self.joy_r = 0
         self.current_param = Modechange()
-        self.main = 0
+        self.main = 1
         self.ref_pos = 350
         self.max_area = rospy.get_param("/tang_teleop/max_area")
         self.max_area_red = rospy.get_param("/tang_teleop/max_area_red")
         self.speed = rospy.get_param("/tang_teleop/speed")
         self.p_gain = 0.0027 * self.speed
         self.command = 0
+        self.depth_min = 0.5
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
         self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_callback, queue_size=1)
@@ -82,23 +84,22 @@ class TangController():
                 pass
         
         elif self.main == 1:
-            motor_r = motor_l = self.speed
-            if self.cmd.max_area == 0: return
-            if (self.cmd.max_area >= self.max_area or self.cmd.is_human == 0):
+            motor_r = motor_l = self.speed * self.cmd.depth
+            if self.cmd.depth <= self.depth_min/self.cmd.depth_thresh or self.cmd.is_human == 0:
                 rospy.logwarn("Stop")
                 motor_r = motor_l = 0
             elif (self.command < 0):
                 motor_r += self.command
-                rospy.loginfo("AN2, right, 32pin, motor_r is up | Turn Left!")
+                rospy.loginfo(
+                    "motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
             elif (self.command >= 0):
                 motor_l -= self.command
-                rospy.loginfo("AN1, left, 33pin, motor_l is up | Turn Right!")
-            # rospy.logwarn(self.cmd.max_area)
+                rospy.loginfo(
+                    "motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
             GPIO.output(gpio_pin_r, GPIO.HIGH)
             GPIO.output(gpio_pin_l, GPIO.HIGH)
             p_r.ChangeDutyCycle(motor_r)
             p_l.ChangeDutyCycle(motor_l)
-            rospy.loginfo("motor_l %lf, motor_r %lf", motor_l, motor_r)
     
         elif self.main == 2:
             motor_r = motor_l = self.speed
@@ -108,15 +109,15 @@ class TangController():
                 motor_r = motor_l = 0
             elif (self.command < 0):
                 motor_r += self.command
-                rospy.loginfo("AN2, right, 32pin, motor_r is up | Turn Left!")
+                rospy.loginfo(
+                    "motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
             elif (self.command >= 0):
                 motor_l -= self.command
-                rospy.loginfo("AN1, left, 33pin, motor_l is up | Turn Right!")
+                rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
             GPIO.output(gpio_pin_r, GPIO.HIGH)
             GPIO.output(gpio_pin_l, GPIO.HIGH)
             p_r.ChangeDutyCycle(motor_r)
             p_l.ChangeDutyCycle(motor_l)
-            rospy.loginfo("motor_l %lf, motor_r %lf", motor_l, motor_r)
 
         
     def p_control(self, cur_pos):
@@ -124,13 +125,14 @@ class TangController():
         @fn p_control()
         @details P制御
         """
+        self.p_gain = 0.0027 * self.speed * self.cmd.depth
         return self.p_gain * (self.ref_pos - cur_pos)
     
     def cmd_callback(self, msg):
         # 人の位置とサイズを得る
         self.cmd = msg
-        self.command = self.p_control(self.cmd.pos)
-        if (abs(self.command) > self.speed):
+        self.command = self.p_control(self.cmd.pos_x)
+        if (abs(self.command) > self.speed * self.cmd.depth):
             self.command = 0
         # rospy.logwarn("Command: %lf", self.command)
         
