@@ -84,7 +84,7 @@ class DetectNet():
         # lcd module
         self.lcd = I2C_LCD_driver.lcd()
         self.param = Modechange()
-        self.param.realsense_thresh = 3.0
+        self.param.realsense_thresh = 4.0
         self.param.current_mode = 1
 
     def mode_callback(self, msg):
@@ -193,11 +193,9 @@ class DetectNet():
                         rospy.loginfo("human_detection mode")
                         self.human_estimation(cuda_mem)
                         if (self.command.is_human == 1):
-                            # cmd_depth = current_depth/max_depth
-                            cmd_depth = depth_frame.get_distance(int(self.command.pos_x), int(
-                                self.command.pos_y)) / self.command.depth_thresh
-                            rospy.logwarn("human_depth : %lf", cmd_depth)
-                            self.command.depth = cmd_depth
+                            current_depth = depth_frame.get_distance(int(self.command.pos_x), int(self.command.pos_y))
+                            rospy.logwarn("human_depth : %lf", current_depth)
+                            self.command.depth = current_depth
                         self.pubmsg.pub(self.command)
                         pass
 

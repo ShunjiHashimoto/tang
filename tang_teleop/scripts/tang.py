@@ -46,14 +46,15 @@ class TangController():
         self.cmd.depth_thresh = 3.0
         self.btn = self.joy_l = self.joy_r = 0
         self.current_param = Modechange()
-        self.main = 1
+        self.current_param.realsense_thresh = 4.0
+        self.main = 0
         self.ref_pos = 350
         self.max_area = rospy.get_param("/tang_teleop/max_area")
         self.max_area_red = rospy.get_param("/tang_teleop/max_area_red")
         self.speed = rospy.get_param("/tang_teleop/speed")
-        self.p_gain = 0.0027 * self.speed
+        self.p_gain = 0.04
         self.command = 0
-        self.depth_min = 0.5
+        self.depth_min = 0.8
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
         self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_callback, queue_size=1)
@@ -80,12 +81,23 @@ class TangController():
                 p_r.ChangeDutyCycle(-(motor_r))
                 p_l.ChangeDutyCycle(-(motor_l))
                 # rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
-            else:
-                pass
+            return
         
         elif self.main == 1:
-            motor_r = motor_l = self.speed * self.cmd.depth
-            if self.cmd.depth <= self.depth_min/self.cmd.depth_thresh or self.cmd.is_human == 0:
+            # 速度を距離に従って減衰させる、3m以内で減衰開始する
+            if(self.cmd.depth >= 3):
+                command_depth = 1.0
+            else:
+                command_depth = self.cmd.depth / 3
+            motor_r = motor_l = self.speed * command_depth
+            
+            # コマンドの制御量を比例制御で決める
+            self.command = self.p_control(self.cmd.pos_x)
+            if (abs(self.command) > motor_r):
+                self.command = 0
+
+            # 80cm以内であれば止まる
+            if self.cmd.depth <= self.depth_min or self.cmd.is_human == 0:
                 rospy.logwarn("Stop")
                 motor_r = motor_l = 0
             elif (self.command < 0):
@@ -98,8 +110,12 @@ class TangController():
                     "motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
             GPIO.output(gpio_pin_r, GPIO.HIGH)
             GPIO.output(gpio_pin_l, GPIO.HIGH)
-            p_r.ChangeDutyCycle(motor_r)
-            p_l.ChangeDutyCycle(motor_l)
+            try:
+                p_r.ChangeDutyCycle(motor_r)
+                p_l.ChangeDutyCycle(motor_l)
+            except:
+                rospy.logwarn("DutyCycle is over 100")
+            return
     
         elif self.main == 2:
             motor_r = motor_l = self.speed
@@ -118,6 +134,7 @@ class TangController():
             GPIO.output(gpio_pin_l, GPIO.HIGH)
             p_r.ChangeDutyCycle(motor_r)
             p_l.ChangeDutyCycle(motor_l)
+            return
 
         
     def p_control(self, cur_pos):
@@ -125,22 +142,19 @@ class TangController():
         @fn p_control()
         @details P制御
         """
-        self.p_gain = 0.0027 * self.speed * self.cmd.depth
+        # self.p_gain = 0.0027 * self.speed * self.cmd.depth
         return self.p_gain * (self.ref_pos - cur_pos)
     
     def cmd_callback(self, msg):
         # 人の位置とサイズを得る
         self.cmd = msg
-        self.command = self.p_control(self.cmd.pos_x)
-        if (abs(self.command) > self.speed * self.cmd.depth):
-            self.command = 0
         # rospy.logwarn("Command: %lf", self.command)
         
     def joy_callback(self, joy_msg):
         # button[5]で上がる、button[4]で下がる、realsenseの認識距離変更
         newbtn = 0
-        max_thresh = 4.0
-        min_thresh = -2.0
+        max_thresh = 7.0
+        min_thresh = 1.0
         self.current_param.realsense_thresh += float(joy_msg.buttons[5])/5
         self.current_param.realsense_thresh -= float(joy_msg.buttons[4])/5
         if(max_thresh < self.current_param.realsense_thresh):
@@ -177,7 +191,7 @@ class TangController():
         push = ((~self.btn) & newbtn)
         self.btn = newbtn
         if(push & BTN_BACK):
-            self.main = (self.main + 1)%3
+            self.main = (self.main + 1)%2
         elif(push & BTN_Y):
             self.speed += 10
         elif(push & BTN_A):
