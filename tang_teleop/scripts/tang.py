@@ -6,7 +6,6 @@ import time
 import RPi.GPIO as GPIO
 from sensor_msgs.msg import Joy
 from tang_detection.msg import Command
-from std_msgs.msg import Int16
 from tang_teleop.msg import Modechange
 
 # modeを選択
@@ -52,9 +51,10 @@ class TangController():
         self.max_area = rospy.get_param("/tang_teleop/max_area")
         self.max_area_red = rospy.get_param("/tang_teleop/max_area_red")
         self.speed = rospy.get_param("/tang_teleop/speed")
-        self.p_gain = 0.04
+        self.prev_command = 0
         self.command = 0
         self.depth_min = 0.8
+        self.dt = 0.1
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
         self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_callback, queue_size=1)
@@ -142,8 +142,11 @@ class TangController():
         @fn p_control()
         @details P制御
         """
-        # self.p_gain = 0.0027 * self.speed * self.cmd.depth
-        return self.p_gain * (self.ref_pos - cur_pos)
+        p_gain = 0.04
+        d_gain = 1.0
+        current_command = p_gain * (self.ref_pos - cur_pos) + d_gain*((self.ref_pos - cur_pos) - self.prev_command)/self.dt
+        self.prev_command = self.ref_pos - cur_pos
+        return current_command
     
     def cmd_callback(self, msg):
         # 人の位置とサイズを得る
