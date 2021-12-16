@@ -2,23 +2,23 @@
 # -*- coding: utf-8 -*-
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
-def red_detect(hsv):
+#認識範囲
+xmin,xmax = 40,1060
+ymin,ymax = 100,500
+
+def yellow_detect(hsv):
     # HSV色空間に変換
     hsv = cv2.cvtColor(hsv, cv2.COLOR_BGR2HSV)
 
-    # 赤色のHSVの値域1(hはもとは9~30らしい)
-    hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
-    hsv_max = np.array([6,255,255])
+    # 黄色のHSVの値域
+    hsv_min = np.array([20,80,10])
+    hsv_max = np.array([30,255,255])
     mask1 = cv2.inRange(hsv, hsv_min, hsv_max)
 
-    # 赤色のHSVの値域2
-    hsv_min = np.array([150,200,0])
-    hsv_max = np.array([179,255,255])
-    mask2 = cv2.inRange(hsv, hsv_min, hsv_max)
-
-    # 赤色領域のマスク（255：赤色、0：赤色以外）    
-    return(mask1 + mask2)
+    # 黄色領域のマスク（255：黄色、0：黄色以外）    
+    return(mask1)
 
 # ブロブ解析
 def analysis_blob(binary_img):
@@ -46,38 +46,39 @@ def analysis_blob(binary_img):
     return maxblob
 
 def main():
-    imgfile_path = "/home/hashimoto/git/tang/tang_detection/figs/dashimaki.png"
+    # フレームを取得
+    prev_frame = cv2.imread("/home/hashimoto/catkin_ws/src/tang/tang_detection/figs/dashimaki.png")
+    # 領域指定
+    frame = prev_frame[ymin:ymax,xmin:xmax] 
+    # cv2.rectangle(frame,(xmin,ymin),(xmax,ymax),(0,0,255),2)
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    # カメラのキャプチャ
-    cap = cv2.VideoCapture(imgfile_path)
-    while(cap.isOpened()):
-    
-        # フレームを取得
-        ret, frame = cap.read()
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    # 黄色検出
+    mask = yellow_detect(hsv)
 
-        # 赤色検出
-        mask = red_detect(hsv)
+    # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
+    target = analysis_blob(mask)
 
-        # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
-        target = analysis_blob(mask)
+    # 面積最大ブロブの中心座標を取得
+    area = int(target["area"])
 
-        # 面積最大ブロブの中心座標を取得
-        center_x = int(target["center"][0])
-        center_y = int(target["center"][1])
+    contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
 
-        # フレームに面積最大ブロブの中心周囲を円で描く
-        cv2.circle(frame, (center_x, center_y), 30, (0, 200, 0),
-                   thickness=3, lineType=cv2.LINE_AA)
+    # 小さい輪郭は誤検出として削除する
+    contours = list(filter(lambda x: cv2.contourArea(x) > 100, contours))
 
-        # 結果表示
-        cv2.imshow("Frame", frame)
-        cv2.imshow("Mask", mask)
-        print("success to show yellow mask")
+    # 輪郭を描画
+    cv2.drawContours(frame, contours, -1, color=(0, 0, 255), thickness=2)
 
-    cap.release()
-    cv2.destroyAllWindows()
+    cv2.imwrite("/home/hashimoto/catkin_ws/src/tang/tang_detection/figs/dashimaki_masked.png", frame)
+    print("success to show yellow mask")
 
+    try:
+        plt.imshow(frame)
+        print("max area", area)
+        plt.show()
+    finally:
+        plt.close()
 
 if __name__ == '__main__':
     main() 
