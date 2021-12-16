@@ -106,11 +106,11 @@ class DetectRed():
         # cv2.circle(frame, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
 
         if ret:
-            # cv2.imshow(window_name, frame)
-            # cv2.imshow("masked_img", h)
+            cv2.imshow(window_name, frame)
+            cv2.imshow("masked_img", h)
             # if cv2.waitKey(delay) & 0xFF == ord('q'):
             #     return
-            return center_x, radius
+            return 
         else:
             self.video.set(cv2.CAP_PROP_POS_FRAMES, 0)
             print("cant show")

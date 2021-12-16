@@ -11,13 +11,14 @@ pkg_name = 'tang_detection'
 if __name__ == "__main__":
     rospy.init_node('red_detection', anonymous=True)
     detection_red = red_detection.DetectRed()
-    video = cv2.VideoCapture(roslib.packages.get_pkg_dir(pkg_name) + rospy.get_param("/tang_detection/video_path"))
+    video =  "/home/hashimoto/git/tang/tang_detection/figs/dashimaki.png"
     while not rospy.is_shutdown():
-        ret, frame = video.read() 
+        ret, frame = cv2.imread(video) 
         try:
-            pos, radius = detection_red.red_detection(frame, ret)
-            print(pos, radius)
+            pos, radius = detection_red.red_detection(video, 1)
+            # print(pos, radius)
         except:
+            print("error")
             pass
     rospy.spin()
 
