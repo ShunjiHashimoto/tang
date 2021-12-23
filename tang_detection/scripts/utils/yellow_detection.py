@@ -2,23 +2,7 @@
 # -*- coding: utf-8 -*-
 import cv2
 import numpy as np
-
-def red_detect(hsv):
-    # HSV色空間に変換
-    hsv = cv2.cvtColor(hsv, cv2.COLOR_BGR2HSV)
-
-    # 赤色のHSVの値域1(hはもとは9~30らしい)
-    hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
-    hsv_max = np.array([6,255,255])
-    mask1 = cv2.inRange(hsv, hsv_min, hsv_max)
-
-    # 赤色のHSVの値域2
-    hsv_min = np.array([150,200,0])
-    hsv_max = np.array([179,255,255])
-    mask2 = cv2.inRange(hsv, hsv_min, hsv_max)
-
-    # 赤色領域のマスク（255：赤色、0：赤色以外）    
-    return(mask1 + mask2)
+import matplotlib.pyplot as plt
 
 # ブロブ解析
 def analysis_blob(binary_img):
@@ -46,38 +30,35 @@ def analysis_blob(binary_img):
     return maxblob
 
 def main():
-    imgfile_path = "/home/hashimoto/git/tang/tang_detection/figs/dashimaki.png"
+    imgfile_path = "/home/hashimoto/git/tang/tang_detection/figs/dashimaki_left.png"
 
     # カメラのキャプチャ
-    cap = cv2.VideoCapture(imgfile_path)
-    while(cap.isOpened()):
-    
-        # フレームを取得
-        ret, frame = cap.read()
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    frame = cv2.imread(imgfile_path)
+    # BGR->RGB
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    # 黄色のHSVの値域
+    hsv_min = np.array([54, 100 ,89])
+    hsv_max = np.array([115, 255 ,255])
+    # 黄色でmaskをかける
+    mask = cv2.inRange(hsv, hsv_min, hsv_max)
 
-        # 赤色検出
-        mask = red_detect(hsv)
+    # find tulips
+    labels, contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
 
-        # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
-        target = analysis_blob(mask)
+    for i in range(0, len(contours)):
+        if len(contours[i]) > 0:
+            # remove small objects
+            if cv2.contourArea(contours[i]) < 500:
+                continue
+            cv2.polylines(frame, contours[i], True, (0, 255, 0), 5)
 
-        # 面積最大ブロブの中心座標を取得
-        center_x = int(target["center"][0])
-        center_y = int(target["center"][1])
-
-        # フレームに面積最大ブロブの中心周囲を円で描く
-        cv2.circle(frame, (center_x, center_y), 30, (0, 200, 0),
-                   thickness=3, lineType=cv2.LINE_AA)
-
-        # 結果表示
-        cv2.imshow("Frame", frame)
-        cv2.imshow("Mask", mask)
-        print("success to show yellow mask")
-
-    cap.release()
-    cv2.destroyAllWindows()
-
+    # 画像を縦に2分割
+    height, width, channels = frame.shape
+    frame = frame[0:height, 0:width/2]
+    plt.imshow(frame)
+    plt.show()
+    print("success to show yellow mask")
 
 if __name__ == '__main__':
     main() 
