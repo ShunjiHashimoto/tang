@@ -13,7 +13,7 @@ I = np.matrix([[1 , 0],
 
 class KalmanFilter:
     def __init__(self):
-        self.mx_timestep = 40
+        self.mx_timestep = 50
         self.dt = 0.1
         self.mean_a = 0
         self.sigma_a = 1
@@ -66,15 +66,19 @@ class KalmanFilter:
         # トロッコ描画
         ims = []
         timestep = 0
+        obs_error = 0
+        kalman_error = 0
         while(timestep < self.mx_timestep):
             timestep += 1
             xk_sys = self.system(self.xk_1) ## 状態方程式で解いた現在の位置、速度
             zk_obs = self.observation(xk_sys) ## 観測方程式から得られた現在の位置、速度
             self.xk_1, self.pk_1 = self.prediction(zk_obs, xk_sys) ## 予測・更新から得られた位置、速度
+            obs_error += (xk_sys[0] - zk_obs)**2
+            kalman_error += (self.xk_1[0] - xk_sys[0])**2
             
             txt1 = ax1.annotate("Torocco", (xk_sys[0], 1.0), (xk_sys[0], 1.01), arrowprops=dict(arrowstyle="->"), fontsize=8, color = "blue")
-            txt2 = ax1.annotate("Observation", (zk_obs[0], 1.0), (zk_obs[0], 1.01), arrowprops=dict(arrowstyle="->"), fontsize=8, color = "red")
-            txt3 = ax1.annotate("Prediction", (self.xk_1[0], 1.0), (self.xk_1[0], 1.01), arrowprops=dict(arrowstyle="->"), fontsize=8, color = "green")
+            txt2 = ax1.annotate("Observed", (zk_obs[0], 1.0), (zk_obs[0], 1.01), arrowprops=dict(arrowstyle="->"), fontsize=8, color = "red")
+            txt3 = ax1.annotate("Estimation", (self.xk_1[0], 1.0), (self.xk_1[0], 1.01), arrowprops=dict(arrowstyle="->"), fontsize=8, color = "green")
             loop_time = ax1.text(-1.5, 1.03,"t = "+str(timestep), fontsize = 10)
             im1 = ax1.plot(xk_sys[0], 1.0, "blue", marker = 'o', markersize = 10)
             im2 = ax1.plot(zk_obs[0], 1.0, "red", marker = 'o', markersize = 10)
@@ -84,6 +88,7 @@ class KalmanFilter:
 
         ani = animation.ArtistAnimation(fig, ims, interval=300)
         plt.show()
+        print(obs_error, kalman_error)
 
 if __name__ == "__main__":
     kalman = KalmanFilter()
