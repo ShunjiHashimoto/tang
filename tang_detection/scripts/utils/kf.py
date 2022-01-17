@@ -11,78 +11,112 @@ from matplotlib.patches import Ellipse
 
 class KalmanFilter:
     def __init__(self):
-        self.dt = 0.1
+        self.dt = 1.0
         self.ex_mean = 0.0
-        self.ex_sigma = 0.1
-        self.ex = np.array([ [0.0], [0.0] ])
-        self.u = np.array([ [2.0*math.cos(math.radians(45))*self.dt] , [2.0*math.sin(math.radians(45))*self.dt] ])
-        self.xk_1 = np.array([ [0.0] , [0.0] ])
-        self.I = np.array([ [1.0, 0.0] , [0.0 ,1.0] ])
-        self.estimation_xk_1 = np.array([ [0.0] , [0.0] ])
+        self.ex_sigma = 2.0
+        self.εp_t = self.εz_t = np.array([ 0.0, 0.0 ]).T
+        # ロボットの実際の値
+        self.pos = np.array([ 0.0 , 0.0 ])
+        self.z = np.array([ 0.0 , 0.0 ])
+        # 入力
+        self.u_t = np.array([ 2.0*math.cos(math.radians(45))*self.dt , 2.0*math.sin(math.radians(45))*self.dt ])
+        # 平均
+        self.mean_t_1 = np.array([ 0.0 , 0.0 ]).T
         self.belief = multivariate_normal(mean=np.array([0.0, 0.0]), cov=np.diag([1e-10, 1e-10]))
+        # 評価指標
+        self.sum_observation = self.sum_estimation = 0
+        
     
-    def state_transition(self, xk_1):
-        self.ex[0] = np.random.normal(self.ex_mean, self.ex_sigma)
-        self.ex[1] = np.random.normal(self.ex_mean, self.ex_sigma)
-        xk =  xk_1 + self.u + self.ex
-        return xk
+    def matI(self):
+        return np.array([ [1.0, 0.0] , [0.0 ,1.0] ])
+    
+    # 移動の誤差
+    def matM(self):
+            return  np.array([ [2.0, 0.0], [0.0, 2.0] ])
+    
+    def matH(self):
+        return  np.array([ [1.0, 0.0], [0.0, 1.0] ])
+    
+    # 観測の共分散
+    def matQ(self):
+        return  np.array([ [2.0, 0.0], [0.0, 2.0] ])
 
-    def sigma_ellipse(self, p, cov, n):  ###kf3calculation
+    # 誤差楕円
+    def sigma_ellipse(self, p, cov, n):  
         eig_vals, eig_vec = np.linalg.eig(cov)
         ang = math.atan2(eig_vec[:,0][1], eig_vec[:,0][0])/math.pi*180
         return Ellipse(p, width=2*n*math.sqrt(eig_vals[0]),height=2*n*math.sqrt(eig_vals[1]), angle=ang, fill=False, color="green", alpha=0.5)
 
-    def matM(self):
-        return  np.array([ [0.1, 0.0], [0.0, 0.1] ])
-
-    def matH(self):
-        return  np.array([ [1.0, 0.0], [0.0, 1.0] ])
+    # 状態遷移方程式、ノイズ有り
+    def state_transition(self, xt_1):
+        self.εp_t[0] = np.random.normal(self.ex_mean, self.ex_sigma)
+        self.εp_t[1] = np.random.normal(self.ex_mean, self.ex_sigma)
+        xt =  xt_1 + self.u_t + self.εp_t
+        return xt
     
-    def matQ(self):
-        return  np.array([ [0.1, 0.0], [0.0, 0.1] ])
+    # 観測方程式、ノイズ有り
+    def state_observation(self, zt_1):
+        self.εz_t[0] = np.random.normal(self.ex_mean, self.ex_sigma)
+        self.εz_t[1] = np.random.normal(self.ex_mean, self.ex_sigma)
+        zt = zt_1 + self.εz_t
+        return zt
         
-    def motion_update(self):
-        self.belief.mean = self.estimation_xk_1 + self.u
-        self.belief.cov = self.belief.cov + self.matM()
-        self.estimation_xk_1 = self.belief.mean
+    # 推測したロボットの位置と共分散を更新する
+    def motion_update(self, mean_t_1, cov_t_1):
+        self.belief.mean = mean_t_1 + self.u_t
+        self.belief.cov = cov_t_1 + self.matM()
     
     def one_step(self, i, elems, ax1):
         ## 前回の図を削除
         while elems: elems.pop().remove()
 
-        ## 状態方程式で解いた現在のx, y、誤差が乗ってる実際のデータ
-        xk_sys = self.state_transition(self.xk_1)
+        ## 実際の値 ########################################################################################
+        ## 状態方程式で解いた現在のpos(x, y)、誤差が乗ってる実際のデータ
+        self.pos = self.state_transition(self.pos)
+        txt_p = ax1.annotate("RealRobot", (self.pos[0], self.pos[1]), (self.pos[0], self.pos[1]+0.2), fontsize=8, color = "blue")
+        elems += ax1.plot(self.pos[0], self.pos[1], "blue", marker = 'o', markersize = 10)
+        elems.append(txt_p)
+        ## 観測方程式で解いた現在の観測値、ノイズ有り
+        self.z = self.state_observation(self.pos)
+        txt_z = ax1.annotate("RealRobot", (self.z[0], self.z[1]), (self.z[0], self.z[1]+0.2), fontsize=8, color = "red")
+        elems += ax1.plot(self.z[0], self.z[1], "red", marker = 'x', markersize = 10)
+        elems.append(txt_z)
+       
+        
+        ## 推測 ########################################################################################
         ## データを更新
-        self.xk_1 = xk_sys
-        ## 青色の丸としてプロットする
-        txt2 = ax1.annotate("RealRobot", (self.xk_1[0], self.xk_1[1]), (self.xk_1[0], self.xk_1[1]+0.2), fontsize=8, color = "blue")
-        elems += ax1.plot(xk_sys[0], xk_sys[1], "blue", marker = 'o', markersize = 10)
-        elems.append(txt2)
+        # self.mean_t_1 = self.pos       
 
         ## 推定したロボットの動き、平均と分散を求める、誤差が乗っていない推定したデータ
-        self.motion_update()
-        
-        e = self.sigma_ellipse(self.belief.mean, self.belief.cov, 1)
-        elems += ax1.plot(self.belief.mean[0], self.belief.mean[1], "green", marker = 'o', markersize = 10)
-        txt1 = ax1.annotate("Estimation", (self.belief.mean[0], self.belief.mean[1]), (self.belief.mean[0], self.belief.mean[1]+0.2), fontsize=8, color = "green")
-        elems.append(txt1)
-        elems.append(ax1.add_patch(e))
-        print(self.belief.mean)
+        self.motion_update(self.belief.mean, self.belief.cov)
+        # 観測方程式：カルマンゲインK
+        H = self.matH()
+        Q = self.matQ()
+        I = self.matI()
+        K = self.belief.cov.dot(H.T).dot(np.linalg.inv(Q + H.dot(self.belief.cov).dot(H.T)))
+        # 観測誤差
+        z_error =  self.z -self.belief.mean
+        # 平均値更新
+        self.belief.mean += np.dot(K, z_error)
+        # 共分散更新
+        self.belief.cov = np.dot((I - np.dot(K, H)), self.belief.cov)
 
-        # 観測方程式
-        # カルマンゲインK
-        if(i%2 == 0):
-            K = self.belief.cov.dot(self.matH().T).dot(np.linalg.inv(self.matQ() + self.matH().dot(self.belief.cov).dot(self.matH().T)))
-            z_error = np.array([np.random.normal(self.ex_mean, self.ex_sigma), np.random.normal(self.ex_mean, self.ex_sigma)]) + self.xk_1 - self.belief.mean
-            self.belief.mean = self.belief.mean + z_error*K
-            self.belief.cov = np.dot((self.I - np.dot(K, self.matH())), self.belief.cov)
+        e = self.sigma_ellipse(self.belief.mean, self.belief.cov, 1)
+        elems.append(ax1.add_patch(e))
+        elems += ax1.plot(self.belief.mean[0], self.belief.mean[1], "green", marker = 'o', markersize = 10)
+        txt2   = ax1.annotate("Estimation", (self.belief.mean[0], self.belief.mean[1]), (self.belief.mean[0], self.belief.mean[1]+0.2), fontsize=8, color = "green")
+        elems.append(txt2)
+
+        self.sum_observation += (abs(self.z - self.pos))
+        self.sum_estimation  += (abs(self.belief.mean - self.pos))
+        print("観測値の誤差: " , self.sum_observation, "推定値の誤差: ", self.sum_estimation)
 
     def draw(self):
-        fig = plt.figure(figsize=(4,4))     #10〜16行目はそのまま
+        fig = plt.figure(figsize=(6,6))     #10〜16行目はそのまま
         ax = fig.add_subplot(111)
         ax.set_aspect('equal')
-        ax.set_xlim(0, 10)
-        ax.set_ylim(0, 10)
+        ax.set_xlim(0, 102)
+        ax.set_ylim(0, 102)
         ax.set_xlabel("X", fontsize=10)
         ax.set_ylabel("Y", fontsize=10)
         

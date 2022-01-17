@@ -53,7 +53,6 @@ class KalmanFilter:
         kk = pk * self.hk.T/ sk
         xk = xk + kk*ek
         pk = (I - kk * self.hk) * pk
-        print(xk)
         return xk, pk
 
     def main(self):
