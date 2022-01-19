@@ -22,24 +22,28 @@ class KalmanFilter:
         self.u_t = np.array([ 2.0*math.cos(math.radians(45))*self.dt , 2.0*math.sin(math.radians(45))*self.dt ])
         # 平均
         self.mean_t_1 = np.array([ 0.0 , 0.0 ]).T
+        # 信念分布
         self.belief = multivariate_normal(mean=np.array([0.0, 0.0]), cov=np.diag([1e-10, 1e-10]))
         # 評価指標
         self.sum_observation = self.sum_estimation = 0
         
-    
+    def get_distance(self, x1, y1, x2, y2):
+        d = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        return d
+
     def matI(self):
         return np.array([ [1.0, 0.0] , [0.0 ,1.0] ])
     
     # 移動の誤差
     def matM(self):
-            return  np.array([ [2.0, 0.0], [0.0, 2.0] ])
+            return  np.array([ [4.0, 0.0], [0.0, 4.0] ])
     
     def matH(self):
         return  np.array([ [1.0, 0.0], [0.0, 1.0] ])
     
     # 観測の共分散
     def matQ(self):
-        return  np.array([ [2.0, 0.0], [0.0, 2.0] ])
+        return  np.array([ [4.0, 0.0], [0.0, 4.0] ])
 
     # 誤差楕円
     def sigma_ellipse(self, p, cov, n):  
@@ -68,25 +72,17 @@ class KalmanFilter:
     
     def one_step(self, i, elems, ax1):
         ## 前回の図を削除
-        while elems: elems.pop().remove()
+        # while elems: elems.pop().remove()
 
         ## 実際の値 ########################################################################################
         ## 状態方程式で解いた現在のpos(x, y)、誤差が乗ってる実際のデータ
         self.pos = self.state_transition(self.pos)
-        txt_p = ax1.annotate("RealRobot", (self.pos[0], self.pos[1]), (self.pos[0], self.pos[1]+0.2), fontsize=8, color = "blue")
-        elems += ax1.plot(self.pos[0], self.pos[1], "blue", marker = 'o', markersize = 10)
-        elems.append(txt_p)
+        elems += ax1.plot(self.pos[0], self.pos[1], "blue", marker = 'o', markersize = 5)
         ## 観測方程式で解いた現在の観測値、ノイズ有り
         self.z = self.state_observation(self.pos)
-        txt_z = ax1.annotate("RealRobot", (self.z[0], self.z[1]), (self.z[0], self.z[1]+0.2), fontsize=8, color = "red")
-        elems += ax1.plot(self.z[0], self.z[1], "red", marker = 'x', markersize = 10)
-        elems.append(txt_z)
+        # elems += ax1.plot(self.z[0], self.z[1], "red", marker = 'x', markersize = 5, label="test")
        
-        
-        ## 推測 ########################################################################################
-        ## データを更新
-        # self.mean_t_1 = self.pos       
-
+        ## 推測 ########################################################################################    
         ## 推定したロボットの動き、平均と分散を求める、誤差が乗っていない推定したデータ
         self.motion_update(self.belief.mean, self.belief.cov)
         # 観測方程式：カルマンゲインK
@@ -103,16 +99,15 @@ class KalmanFilter:
 
         e = self.sigma_ellipse(self.belief.mean, self.belief.cov, 1)
         elems.append(ax1.add_patch(e))
-        elems += ax1.plot(self.belief.mean[0], self.belief.mean[1], "green", marker = 'o', markersize = 10)
-        txt2   = ax1.annotate("Estimation", (self.belief.mean[0], self.belief.mean[1]), (self.belief.mean[0], self.belief.mean[1]+0.2), fontsize=8, color = "green")
-        elems.append(txt2)
-
-        self.sum_observation += (abs(self.z - self.pos))
-        self.sum_estimation  += (abs(self.belief.mean - self.pos))
+        elems += ax1.plot(self.belief.mean[0], self.belief.mean[1], "green", marker = 'o', markersize = 5)
+        self.sum_observation += self.get_distance(self.z[0], self.z[1], self.pos[0], self.pos[1])
+        self.sum_estimation  += self.get_distance(self.belief.mean[0], self.belief.mean[1], self.pos[0], self.pos[1])
         print("観測値の誤差: " , self.sum_observation, "推定値の誤差: ", self.sum_estimation)
+        # ax1.legend(["RealRobot", "Observed", "Estimated"])
+        ax1.legend(["RealRobot", "Estimated"])
 
     def draw(self):
-        fig = plt.figure(figsize=(6,6))     #10〜16行目はそのまま
+        fig = plt.figure(figsize=(10,10))     #10〜16行目はそのまま
         ax = fig.add_subplot(111)
         ax.set_aspect('equal')
         ax.set_xlim(0, 102)
