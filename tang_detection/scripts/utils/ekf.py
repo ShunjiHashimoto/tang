@@ -114,15 +114,16 @@ class KalmanFilter:
     def one_step(self, i, elems, ax1):
         ## 前回の図を削除
         while elems: elems.pop().remove()
+        if(i == 0): time.sleep(2.0)
         # print(elems, "\n")
 
         ## 実際の値 ########################################################################################
         ## 状態方程式で解いた現在のpos(x, y, theta)、誤差が乗ってる実際のデータ
         self.pos, theta = self.state_transition(self.pos, i)
-        elems += ax1.plot(self.pos[0], self.pos[1], "blue", marker = 'o', markersize = 5)
+        elems += ax1.plot(self.pos[0], self.pos[1], "blue", marker = 'o', markersize = 8)
         ## 観測方程式で解いた現在の観測値、ノイズ有り(x, y, theta)
         self.z = self.state_observation(self.pos, theta)
-        elems += ax1.plot(self.z[0]*math.cos(self.z[1]), self.z[0]*math.sin(self.z[1]), "red", marker = 'x', markersize = 5, label="test")
+        elems += ax1.plot(self.z[0]*math.cos(self.z[1]), self.z[0]*math.sin(self.z[1]), "red", marker = '*', markersize = 8, label="test")
        
         ## 推測 ########################################################################################    
         ## 推定したロボットの動き、平均と分散を求める、誤差が乗っていない推定したデータ
@@ -143,30 +144,32 @@ class KalmanFilter:
 
         e = self.sigma_ellipse(self.belief.mean, self.belief.cov, 2)
         elems.append(ax1.add_patch(e))
-        elems += ax1.plot(self.belief.mean[0], self.belief.mean[1], "green", marker = 'o', markersize = 5)
+        elems += ax1.plot(self.belief.mean[0], self.belief.mean[1], "green", marker = 'o', markersize = 8)
         self.sum_observation += self.get_distance(self.z[0], self.z[1], self.pos[0], self.pos[1])
         self.sum_estimation  += self.get_distance(self.belief.mean[0], self.belief.mean[1], self.pos[0], self.pos[1])
         print("観測値の誤差: " , self.sum_observation, "推定値の誤差: ", self.sum_estimation)
         ax1.legend(["Truth", "Observed", "Estimated"])
         ax1.set_title(f"test /timestep={i}")
-        ax1.set_title("例題\n XY平面上でt=0[sec]に原点を出発し、45度方向に秒速2[m/sec]で移動している物体がある。\n  \
-            この移動には外乱による影響がある。また、1秒ごとに位置座標の観測がある。\n \
-            この観測にもノイズが含まれる。この物体の位置をカルマンフィルタを用いて推定する。\n \
+        ax1.set_title("例題\n \
+            2次元平面を等速円運動「しようと」している物体があるとします。この物体には外乱が加わっているとします。\n \
+            原点にいる観測者からは、各時刻で、物体への距離と方位角が計測できるとします。この観測には観測ノイズが加わります。\n  \
+            円運動の半径はL=100[m]とし、角速度はω=π/10、物体位置に対するノイズの分散はσw=1.0、\n \
+            物体への距離の観測のノイズの分散はσr=10.0、物体の方位角の分散はσb=5.0π/180とします。\n \
             t=" + str(i) + "[sec]", fontname="IPAexGothic")
+        elems += ax1.plot(0.0, 0.0, "black", marker = 'x', markersize = 8)
         # ax1.legend(["RealRobot", "Estimated"])
 
     def draw(self):
         fig = plt.figure(figsize=(10,10))     #10〜16行目はそのまま
         ax = fig.add_subplot(111)
         ax.set_aspect('equal')
-        ax.set_xlim(-500, 500)
-        ax.set_ylim(-500, 500)
+        ax.set_xlim(-180, 180)
+        ax.set_ylim(-180, 180)
         ax.set_xlabel("X", fontsize=10)
         ax.set_ylabel("Y", fontsize=10)
         
         elems = []
-        
-        self.ani = anm.FuncAnimation(fig, self.one_step, fargs=(elems, ax), frames=51, interval=500, repeat=False) # 100[m/s]
+        self.ani = anm.FuncAnimation(fig, self.one_step, fargs=(elems, ax), frames=51, interval=200, repeat=False) # 100[m/s]
         plt.show()
         
 if __name__ == "__main__":
