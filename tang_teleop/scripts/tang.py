@@ -142,13 +142,15 @@ class TangController():
 
         elif self.main == 3:
             motor_r = motor_l = 0
-            if (self.cmdvel_from_imu <= 0.1 and self.cmdvel_from_imu >= -0.1):
+            if (self.cmdvel_from_imu.angular.z <= 0.1 and self.cmdvel_from_imu.angular.z >= -0.1):
                 rospy.logwarn("Stop")
                 motor_r = motor_l = 0
-            elif (self.cmdvel_from_imu > 0):
-                motor_r += self.cmdvel_from_imu
-            elif (self.cmdvel_from_imu < 0):
-                motor_l += self.cmdvel_from_imu
+            elif (self.cmdvel_from_imu.angular.z > 0):
+                motor_r += self.cmdvel_from_imu.angular.z
+            elif (self.cmdvel_from_imu.angular.z < 0):
+                motor_l += -self.cmdvel_from_imu.angular.z
+            else:
+                rospy.logwarn("Something wrong")
 
             GPIO.output(gpio_pin_r, GPIO.HIGH)
             GPIO.output(gpio_pin_l, GPIO.HIGH)
