@@ -7,6 +7,8 @@ import RPi.GPIO as GPIO
 from sensor_msgs.msg import Joy
 from tang_detection.msg import Command
 from tang_teleop.msg import Modechange
+from geometry_msgs.msg import Twist
+
 
 # modeを選択
 GPIO.setmode(GPIO.BCM)
@@ -42,11 +44,12 @@ AXS_OFF = 0.0
 class TangController():
     def __init__(self):
         self.cmd = Command()
+        self.cmdvel_from_imu = Twist()
         self.cmd.depth_thresh = 3.0
         self.btn = self.joy_l = self.joy_r = 0
         self.current_param = Modechange()
         self.current_param.realsense_thresh = 4.0
-        self.main = 0
+        self.main = 3
         self.ref_pos = 350
         self.max_area = rospy.get_param("/tang_teleop/max_area")
         self.max_area_red = rospy.get_param("/tang_teleop/max_area_red")
@@ -58,6 +61,7 @@ class TangController():
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
         self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_callback, queue_size=1)
+        self.imu_sub = rospy.Subscriber('cmdvel_from_imu', Twist, self.imu_callback, queue_size=1)
         # subscribe to joystick messages on topic "joy"
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joy_callback, queue_size=1)
         # publisher, モードと距離の閾値、赤色検出の閾値をpub
@@ -136,6 +140,22 @@ class TangController():
             p_l.ChangeDutyCycle(motor_l)
             return
 
+        elif self.main == 3:
+            motor_r = motor_l = 0
+            if (self.cmdvel_from_imu <= 0.1 and self.cmdvel_from_imu >= -0.1):
+                rospy.logwarn("Stop")
+                motor_r = motor_l = 0
+            elif (self.cmdvel_from_imu > 0):
+                motor_r += self.cmdvel_from_imu
+            elif (self.cmdvel_from_imu < 0):
+                motor_l += self.cmdvel_from_imu
+
+            GPIO.output(gpio_pin_r, GPIO.HIGH)
+            GPIO.output(gpio_pin_l, GPIO.HIGH)
+            p_r.ChangeDutyCycle(motor_r)
+            p_l.ChangeDutyCycle(motor_l)
+            return
+
         
     def p_control(self, cur_pos):
         """
@@ -151,7 +171,9 @@ class TangController():
     def cmd_callback(self, msg):
         # 人の位置とサイズを得る
         self.cmd = msg
-        # rospy.logwarn("Command: %lf", self.command)
+    
+    def imu_callback(self, msg):
+        self.cmdvel_from_imu = msg
         
     def joy_callback(self, joy_msg):
         # button[5]で上がる、button[4]で下がる、realsenseの認識距離変更
