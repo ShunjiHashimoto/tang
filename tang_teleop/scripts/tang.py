@@ -145,15 +145,29 @@ class TangController():
             if (self.cmdvel_from_imu.angular.z <= 0.1 and self.cmdvel_from_imu.angular.z >= -0.1):
                 rospy.logwarn("Stop")
                 motor_r = motor_l = 0
+
             elif (self.cmdvel_from_imu.angular.z > 0):
+                GPIO.output(gpio_pin_r, GPIO.LOW)
                 motor_r += self.cmdvel_from_imu.angular.z
+                GPIO.output(gpio_pin_l, GPIO.HIGH)
+                motor_l += self.cmdvel_from_imu.angular.z
+
             elif (self.cmdvel_from_imu.angular.z < 0):
+                GPIO.output(gpio_pin_l, GPIO.LOW)
                 motor_l += -self.cmdvel_from_imu.angular.z
+                GPIO.output(gpio_pin_r, GPIO.HIGH)
+                motor_r += -self.cmdvel_from_imu.angular.z
+
             else:
                 rospy.logwarn("Something wrong")
 
-            GPIO.output(gpio_pin_r, GPIO.HIGH)
-            GPIO.output(gpio_pin_l, GPIO.HIGH)
+            if(motor_r >= 100): motor_r = 100
+            if(motor_r <= -100): motor_r = -100
+            if(motor_l >= 100): motor_l = 100
+            if(motor_l <= -100): motor_l = -100
+            rospy.logwarn("motor_r:%d, motor_l:%d", motor_r, motor_l)
+            # GPIO.output(gpio_pin_r, GPIO.HIGH)
+            # GPIO.output(gpio_pin_l, GPIO.HIGH)
             p_r.ChangeDutyCycle(motor_r)
             p_l.ChangeDutyCycle(motor_l)
             return

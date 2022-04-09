@@ -38,7 +38,7 @@ class DirectionController(object):
         self._imu_data_raw = Imu()
 
         # for angle control
-        self._omega_pid_controller = PIDController(0.1, 0, 2)
+        self._omega_pid_controller = PIDController(3.3, 0.004, 6.0)
         self._target_angle = 0.0
 
         # for heading_angle calculation
@@ -56,6 +56,7 @@ class DirectionController(object):
     def _imu_callback(self, imu_msg):
         self._imu_data_raw = imu_msg
         self._heading_angle  = self._quaternion_to_euler_zyx(self._imu_data_raw.orientation)[2]
+        print("角度", self._heading_angle)
 
     def _angle_control(self, target_angle=0.0):
         SIGN = -1.0
