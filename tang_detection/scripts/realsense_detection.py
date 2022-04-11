@@ -14,9 +14,11 @@ import argparse
 import rospy
 import roslib.packages
 from tang_detection.msg import Command
+from tang_teleop.msg import Modechange
 from std_msgs.msg import Int16
-from std_msgs.msg import String
 from sensor_msgs.msg import Joy
+import I2C_LCD_driver
+
 
 # 赤色検出モジュール
 import red_detection
@@ -35,6 +37,7 @@ import math
 WIDTH = 640
 HEIGHT = 480
 FPS = 60
+
 
 class PubMsg():
     """
@@ -63,25 +66,29 @@ class DetectNet():
 
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
-        self.threshold = rospy.get_param("/tang_detection/threshold")
-        self.mode = 1
         # create video output object
         self.output = jetson.utils.videoOutput("display://0")
         # load the object detection network
-        self.net = jetson.inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
+        self.net = jetson.inference.detectNet(
+            "ssd-mobilenet-v2", threshold=0.5)
         # create video sources
         self.input = jetson.utils.videoSource("/dev/video2")
         # publisher
         self.pubmsg = PubMsg()
         # subscriber
-        self.joy_sub = rospy.Subscriber("current_mode", Int16, self.mode_callback, queue_size=1)
+        self.joy_sub = rospy.Subscriber(
+            "current_param", Modechange, self.mode_callback, queue_size=1)
         # msg type
         self.command = Command()
         self.detection_red = red_detection.DetectRed()
+        # lcd module
+        self.lcd = I2C_LCD_driver.lcd()
+        self.param = Modechange()
+        self.param.realsense_thresh = 4.0
+        self.param.current_mode = 1
 
     def mode_callback(self, msg):
-        self.mode = msg.data
-        print(self.mode)
+        self.param = msg
 
     def human_estimation(self, img):
         """
@@ -89,32 +96,41 @@ class DetectNet():
         @param img 背景処理された画像
         @details darknetを用いて人検出
         """
-        detections = self.net.Detect(img)
-        if (not detections):
-            return
         max_area = 0
         self.command.is_human = 0
+        detections = self.net.Detect(img)
+        if (not detections):
+            self.command.max_area = 0
+            return
         for detection in detections:
             if (detection.ClassID != 1):
+                self.command.is_human = 0
+                self.command.max_area = 0
                 continue
             if (max_area < detection.Area and detection.ClassID == 1):
                 max_area = int(detection.Area)
                 human_pos = detection.Center
                 self.command.is_human = 1
         # render the image
-        self.output.Render(img)
+        # self.output.Render(img)
         # # update the title bar
-        self.output.SetStatus("Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
+        # self.output.SetStatus(
+            # "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
         # exit on input/output EOS
-        if not self.input.IsStreaming() or not self.output.IsStreaming():
-            self.command.pos = human_pos[0]
+        if not self.input.IsStreaming() and self.command.is_human == 1:
+            self.command.pos_x = human_pos[0]
+            self.command.pos_y = human_pos[1]
             self.command.max_area = max_area
+        else:
+            self.command.max_area = 0
+            self.command.is_human = 0
         return
 
     def main_loop(self):
         """
         @fn main_loop()
         @brief 背景処理後、numpyからcuda_imgに変換、人物検出を行う
+        joyから距離のthreshholdを変更できるようにしたい
         """
         align = rs.align(rs.stream.color)
         config = rs.config()
@@ -125,11 +141,14 @@ class DetectNet():
         pipeline = rs.pipeline()
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
-        max_dist = self.threshold/depth_scale
-        r = rospy.Rate(10) # 10hz
+        r = rospy.Rate(10)  # 10hz
 
         try:
             while not rospy.is_shutdown():
+                # realsensenの認識距離設定
+                self.command.depth_thresh = self.param.realsense_thresh
+                rospy.logwarn("距離のしきい値： %lf", self.param.realsense_thresh)
+                max_dist = self.command.depth_thresh/depth_scale
                 # フレーム取得
                 frames = pipeline.wait_for_frames()
                 aligned_frames = align.process(frames)
@@ -148,8 +167,6 @@ class DetectNet():
                 # 指定距離以上を無視した深度画像
                 depth_image = np.asanyarray(depth_frame.get_data())
                 depth_filtered_image = (depth_image < max_dist) * depth_image
-                depth_gray_filtered_image = (
-                    depth_filtered_image * 255. / max_dist).reshape((HEIGHT, WIDTH)).astype(np.uint8)
 
                 # 指定距離以上を無視したRGB画像
                 # realsense側の型を調べる -> <class 'numpy.ndarray'>
@@ -159,23 +176,37 @@ class DetectNet():
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
                 try:
-                    if(self.mode == 0):
+                    if(self.param.current_mode == 0):
                         # 0 = teleopmode
                         rospy.loginfo("teleop mode")
+                        r = rospy.Rate(10)  # 10hz
+                        self.lcd.lcd_display_string("TANG", 1)
+                        self.lcd.lcd_display_string("~ Teleop mode ~", 2)
                         r.sleep()
                         pass
 
-                    elif(self.mode == 1):
+                    elif(self.param.current_mode == 1):
                         # 1 = humanmode
+                        self.lcd.lcd_display_string("~ Follow mode ~", 1)
+                        self.lcd.lcd_display_string(
+                            "thresh = " + str(self.command.depth_thresh), 2)
                         rospy.loginfo("human_detection mode")
                         self.human_estimation(cuda_mem)
+                        if (self.command.is_human == 1):
+                            current_depth = depth_frame.get_distance(int(self.command.pos_x), int(self.command.pos_y))
+                            rospy.logwarn("human_depth : %lf", current_depth)
+                            self.command.depth = current_depth
                         self.pubmsg.pub(self.command)
-                        r.sleep()
+                        pass
 
-                    elif(self.mode == 2):
+                    elif(self.param.current_mode == 2):
                         # 2 = redmode
+                        r = rospy.Rate(10)  # 10hz
+                        self.lcd.lcd_display_string("TANG", 1)
+                        self.lcd.lcd_display_string("~ Red mode ~", 2)
                         rospy.loginfo("red_detection mode")
-                        self.command.pos, self.command.max_area = self.detection_red.red_detection(color_filtered_image, ret = 1)
+                        self.command.pos_x, self.command.max_area = self.detection_red.red_detection(
+                            color_filtered_image, ret=1)
                         print(self.command.max_area)
                         self.pubmsg.pub(self.command)
                         r.sleep()
@@ -183,16 +214,13 @@ class DetectNet():
 
                     else:
                         pass
-                        
+
                 except:
                     rospy.logwarn("nothing target")
                     continue
 
         finally:
             pipeline.stop()
-        
-    def mode_callback(self, msg):
-        self.mode = msg.data
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ class DetectRed():
         @param hsv hsv値で表現された画像
         @details 赤色とそれ以外で二値化
         """
-        # 赤色のHSVの値域1
+        # 赤色のHSVの値域1(hはもとは9~30らしい)
         hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
         hsv_max = np.array([6,255,255])
         mask1 = cv2.inRange(hsv, hsv_min, hsv_max)
@@ -102,15 +102,15 @@ class DetectRed():
         radius = int((target["width"] + target["height"])/4)
 
         # フレームに面積最大ブロブの中心周囲を円で描く
-        cv2.circle(frame, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
-        cv2.circle(frame, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+        # cv2.circle(frame, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+        # cv2.circle(frame, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
 
         if ret:
             cv2.imshow(window_name, frame)
             cv2.imshow("masked_img", h)
-            if cv2.waitKey(delay) & 0xFF == ord('q'):
-                return
-            return center_x, radius
+            # if cv2.waitKey(delay) & 0xFF == ord('q'):
+            #     return
+            return 
         else:
             self.video.set(cv2.CAP_PROP_POS_FRAMES, 0)
             print("cant show")
