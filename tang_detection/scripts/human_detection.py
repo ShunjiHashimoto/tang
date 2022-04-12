@@ -17,11 +17,12 @@ from tang_detection.msg import Command
 from tang_teleop.msg import Modechange
 from std_msgs.msg import Int16
 from sensor_msgs.msg import Joy
-import I2C_LCD_driver
 
+# 液晶ディスプレイ表示用モジュール
+import module.lcd_display as lcd_display
 
 # 赤色検出モジュール
-import red_detection
+import module.red_detection as red_detection
 
 # realsense
 import pyrealsense2 as rs
@@ -30,14 +31,10 @@ import pyrealsense2 as rs
 import sys
 import numpy as np
 from numpy.lib.function_base import copy
-import cv2
-import time
-import math
 
 WIDTH = 640
 HEIGHT = 480
 FPS = 60
-
 
 class PubMsg():
     """
@@ -82,7 +79,7 @@ class DetectNet():
         self.command = Command()
         self.detection_red = red_detection.DetectRed()
         # lcd module
-        self.lcd = I2C_LCD_driver.lcd()
+        self.lcd = lcd_display.lcd()
         self.param = Modechange()
         self.param.realsense_thresh = 4.0
         self.param.current_mode = 1
