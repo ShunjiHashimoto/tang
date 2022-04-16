@@ -13,8 +13,8 @@ import argparse
 # ros
 import rospy
 import roslib.packages
-from tang_detection.msg import Command
-from tang_teleop.msg import Modechange
+from tang_msgs.msg import Command
+from tang_msgs.msg import Modechange
 from std_msgs.msg import Int16
 from sensor_msgs.msg import Joy
 

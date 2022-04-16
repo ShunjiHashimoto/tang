@@ -5,8 +5,8 @@ import rospy
 import time
 import RPi.GPIO as GPIO
 from sensor_msgs.msg import Joy
-from tang_detection.msg import Command
-from tang_teleop.msg import Modechange
+from tang_msgs.msg import Command
+from tang_msgs.msg import Modechange
 from geometry_msgs.msg import Twist
 
 

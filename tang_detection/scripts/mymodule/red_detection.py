@@ -7,7 +7,7 @@ import cv2
 import rospy
 from std_msgs.msg import String
 import roslib.packages
-from tang_detection.msg import Command
+from tang_msgs.msg import Command
 
 
 delay = 1
