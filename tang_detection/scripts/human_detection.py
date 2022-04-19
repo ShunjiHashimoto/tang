@@ -13,16 +13,15 @@ import argparse
 # ros
 import rospy
 import roslib.packages
-from tang_msgs.msg import Command
-from tang_msgs.msg import Modechange
+from tang_msgs.msg import Command, Modechange
 from std_msgs.msg import Int16
 from sensor_msgs.msg import Joy
 
 # 液晶ディスプレイ表示用モジュール
-import module.lcd_display as lcd_display
+from mymodule import lcd_display
 
 # 赤色検出モジュール
-import module.red_detection as red_detection
+from mymodule import red_detection
 
 # realsense
 import pyrealsense2 as rs
