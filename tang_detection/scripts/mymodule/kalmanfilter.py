@@ -20,6 +20,7 @@ class KalmanFilter():
         self.w_mean = 0.0
         self.sigma_w = 0.1 # 人の速度に対するノイズ
         self.v_mean = 0.0
+        # TODO: x（カメラ前方）方向、y方向の観測ノイズをデータ取りする
         self.sigma_v = 0.01 # 観測ノイズ
 
         self.time_interval = loop_rate
