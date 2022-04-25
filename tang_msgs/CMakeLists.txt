@@ -21,6 +21,7 @@ add_message_files(
   FILES
   Command.msg
   Modechange.msg
+  DetectionResult.msg
 )
 
 ## Generate services in the 'srv' folder

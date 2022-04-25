@@ -15,7 +15,7 @@ class KalmanFilter():
     @class KalmanFilter
     @brief カルマンフィルタを使って人の位置を推定する
     """
-    def __init__(self, human_input, loop_rate):
+    def __init__(self, human_input):
         self.belief = multivariate_normal(mean=human_input, cov=np.diag([1e-10, 1e-10, 1e-10, 1e-10, 1e-10]))
         self.w_mean = 0.0
         self.sigma_w = 0.1 # 人の速度に対するノイズ
@@ -23,7 +23,7 @@ class KalmanFilter():
         # TODO: x（カメラ前方）方向、y方向の観測ノイズをデータ取りする
         self.sigma_v = 0.01 # 観測ノイズ
 
-        self.time_interval = loop_rate
+        self.time_interval = 0.1
 
     """
     @fn camera_to_world()
@@ -163,7 +163,8 @@ class KalmanFilter():
         self.belief.mean += np.dot(K, z_error) # 平均値更新
         self.belief.cov = (I - K.dot(H)).dot(self.belief.cov) # 共分散更新
     
-    def main_loop(self, xt_1, robot_vw):
+    def main_loop(self, xt_1, robot_vw, loop_rate):
+        self.time_interval = loop_rate
         # 人の次の位置を計算
         xt = self.human_state_transition(xt_1, robot_vw)
         # 観測値の次の値を計算
