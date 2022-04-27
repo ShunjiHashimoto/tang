@@ -74,18 +74,21 @@ class DetectNet():
     @class DetectNet
     @brief 人物検出&赤検出クラス
     """
+
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
         # create video output object
         self.output = jetson.utils.videoOutput("display://0")
         # load the object detection network
-        self.net = jetson.inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
+        self.net = jetson.inference.detectNet(
+            "ssd-mobilenet-v2", threshold=0.5)
         # create video sources
         self.input = jetson.utils.videoSource("/dev/video2")
         # publisher
         self.pubmsg = PubMsg()
         # subscriber
-        self.joy_sub = rospy.Subscriber("current_param", Modechange, self.mode_callback, queue_size=1)
+        self.joy_sub = rospy.Subscriber(
+            "current_param", Modechange, self.mode_callback, queue_size=1)
         # command type
         self.command = Command()
         self.param = Modechange()
@@ -96,12 +99,15 @@ class DetectNet():
         self.delta_t = 0.0
         self.human_input = np.array([1.0, 1.0, 0.0, 0.001, 0.0]).T
         self.prev_human_input = np.array([0.0, 0.0, 0.0, 0.001, 0.0]).T
-    
+
     def calc_delta_time(self):
         now = rospy.Time.now().to_sec()
         delta_t = now - self.prev_time
         self.prev_time = now
         return delta_t
+
+    def trans_camera_to_robot(self, pos_3d):
+        return [pos_3d[2], -pos_3d[0], -pos_3d[1]]
 
     def mode_callback(self, msg):
         self.param = msg
@@ -129,11 +135,12 @@ class DetectNet():
         # render the image
         self.output.Render(img)
         # update the title bar
-        self.output.SetStatus("Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
+        self.output.SetStatus(
+            "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
         # exit on input/output EOS
         if not self.input.IsStreaming() and self.command.is_human == 1:
-            self.command.pos_x = human_pos[0] # [pixel]
-            self.command.pos_y = human_pos[1] # [pixel]
+            self.command.pos_x = human_pos[0]  # [pixel]
+            self.command.pos_y = human_pos[1]  # [pixel]
             self.command.max_area = max_area
         else:
             self.command.max_area = 0
@@ -149,19 +156,22 @@ class DetectNet():
         # realsense setting
         align = rs.align(rs.stream.color)
         config = rs.config()
-        config.enable_stream(rs.stream.color, WIDTH, HEIGHT, rs.format.bgr8, FPS)
-        config.enable_stream(rs.stream.depth, WIDTH, HEIGHT, rs.format.z16, FPS)
+        config.enable_stream(rs.stream.color, WIDTH,
+                             HEIGHT, rs.format.bgr8, FPS)
+        config.enable_stream(rs.stream.depth, WIDTH,
+                             HEIGHT, rs.format.z16, FPS)
         pipeline = rs.pipeline()
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
         # 内部パラメータ取得
-        color_intr = rs.video_stream_profile(profile.get_stream(rs.stream.color)).get_intrinsics()
+        color_intr = rs.video_stream_profile(
+            profile.get_stream(rs.stream.color)).get_intrinsics()
 
         r = rospy.Rate(10)  # 10hz
 
         # KalmanFileter
         robot_vw = np.array([0.000001, 0.000001])
-        kalman = kalmanfilter.KalmanFilter(self.human_input, 0.1)
+        kalman = kalmanfilter.KalmanFilter(self.human_input)
 
         try:
             while not rospy.is_shutdown():
@@ -185,10 +195,6 @@ class DetectNet():
                 # RGB画像
                 color_image = np.asanyarray(color_frame.get_data())
 
-                # 深度画像
-                # depth_color_frame = rs.colorizer().colorize(result_frame)
-                # depth_color_image = np.asanyarray(depth_color_frame.get_data())
-
                 # 指定距離以上を無視した深度画像
                 depth_image = np.asanyarray(result_frame.get_data())
                 depth_filtered_image = (depth_image < max_dist) * depth_image
@@ -200,7 +206,7 @@ class DetectNet():
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(color_filtered_image)
                 delta_t = self.calc_delta_time()
-                
+
                 try:
                     if(self.param.current_mode == 0):
                         # 0 = teleopmode
@@ -208,20 +214,30 @@ class DetectNet():
                         r.sleep()
                         pass
 
-                    elif(self.param.current_mode == 1):
+                    elif (self.param.current_mode == 1):
                         self.human_estimation(cuda_mem)
                         if (self.command.is_human == 1):
-                            position_3d = rs.rs2_deproject_pixel_to_point(color_intr, [int(self.command.pos_x), int(self.command.pos_y)], self.command.depth)
-                            self.command.depth = position_3d[2]
+                            self.command.depth = result_frame.get_distance(
+                                int(self.command.pos_x), int(self.command.pos_y))
+                            position_3d = rs.rs2_deproject_pixel_to_point(
+                                color_intr, [int(self.command.pos_x), int(self.command.pos_y)], self.command.depth)
+                            position_3d_from_robot = self.trans_camera_to_robot(
+                                position_3d)
                             # 推定開始
-                            vx =  (position_3d[0] - self.prev_human_input[0])/delta_t
-                            vy =  (position_3d[1] - self.prev_human_input[1])/delta_t
-                            human_input = np.array([position_3d[0], position_3d[1], position_3d[2], vx, vy]).T
-                            human_pos_beleif = kalman.main_loop(human_input, robot_vw, delta_t)
-                            self.prev_human_input =  np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1], \
-                                                               human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
-                            print("input: ", human_input)
-                            print("estimated: ", human_pos_beleif.mean)
+                            vx = (position_3d_from_robot[0] -
+                                  self.prev_human_input[0])/delta_t
+                            vy = (position_3d_from_robot[1] -
+                                  self.prev_human_input[1])/delta_t
+                            human_input = np.array(
+                                [position_3d_from_robot[0], position_3d_from_robot[1], position_3d_from_robot[2], vx, vy]).T
+                            human_pos_beleif = kalman.main_loop(
+                                human_input, robot_vw, delta_t)
+                            self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
+                                                              human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
+                            rospy.loginfo(
+                                "human_input: x:%lf, y:%lf, z:%lf", human_input[0], human_input[1], human_input[2])
+                            rospy.logwarn(
+                                "estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
                         self.pubmsg.pub(self.command)
                         pass
 
@@ -231,11 +247,10 @@ class DetectNet():
                 except:
                     rospy.logwarn("nothing target")
                     continue
-
         finally:
             pipeline.stop()
 
 
 if __name__ == "__main__":
-    detectnet=DetectNet()
+    detectnet = DetectNet()
     detectnet.main_loop()
