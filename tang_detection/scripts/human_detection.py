@@ -108,9 +108,23 @@ class DetectNet():
 
     def trans_camera_to_robot(self, pos_3d):
         return [pos_3d[2], -pos_3d[0], -pos_3d[1]]
+    
+    def trans_robot_to_camera(self, pos_3d):
+        return [-pos_3d[1], -pos_3d[2], pos_3d[0]]
 
     def mode_callback(self, msg):
         self.param = msg
+
+    def render_image(self, img, cx, cy, color):
+        # render the image
+        jetson.utils.cudaDrawCircle(
+            img, (cx, cy), 50, color)  # (cx,cy), radius, color
+        self.output.Render(img)
+
+    def output_image(self):
+        # update the title bar
+        self.output.SetStatus(
+            "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
 
     def human_estimation(self, img):
         """
@@ -132,11 +146,7 @@ class DetectNet():
                 max_area = int(detection.Area)
                 human_pos = detection.Center
                 self.command.is_human = 1
-        # render the image
-        self.output.Render(img)
-        # update the title bar
-        self.output.SetStatus(
-            "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
+
         # exit on input/output EOS
         if not self.input.IsStreaming() and self.command.is_human == 1:
             self.command.pos_x = human_pos[0]  # [pixel]
@@ -192,6 +202,9 @@ class DetectNet():
                 if not result_frame or not color_frame:
                     continue
 
+                depth_to_color_extrin = depth_frame.profile.get_extrinsics_to(
+                    color_frame.profile)
+
                 # RGB画像
                 color_image = np.asanyarray(color_frame.get_data())
 
@@ -238,6 +251,30 @@ class DetectNet():
                                 "human_input: x:%lf, y:%lf, z:%lf", human_input[0], human_input[1], human_input[2])
                             rospy.logwarn(
                                 "estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
+                            # TODO: render human input and estimated
+                            color_input = (0, 0, 127, 200)
+                            self.render_image(
+                                cuda_mem, self.command.pos_x, self.command.pos_y, color_input)
+
+                            # estimated 3d_pos to 2d_pos
+                            estimated_color = (0, 255, 127, 200)
+                            estimated_3d_pos = (
+                                human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_input[2])
+                            print(
+                                "positino_3d", position_3d[0], position_3d[1], position_3d[2])
+                            estimated_3d_pos = self.trans_robot_to_camera(estimated_3d_pos)
+                            print(
+                                "human_pos_beleif", estimated_3d_pos[0], estimated_3d_pos[1], estimated_3d_pos[2])
+                            estimated_point_to_pixel = rs.rs2_project_point_to_pixel(
+                                color_intr, estimated_3d_pos)
+                            print("observed_pixel: ",
+                                  self.command.pos_x, self.command.pos_y)
+                            print("estimated_point_to_pixel",
+                                  estimated_point_to_pixel[0], estimated_point_to_pixel[1])
+                            self.render_image(
+                                cuda_mem, estimated_point_to_pixel[0], estimated_point_to_pixel[1], estimated_color)
+
+                            self.output_image()
                         self.pubmsg.pub(self.command)
                         pass
 
