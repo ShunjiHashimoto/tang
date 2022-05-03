@@ -3,6 +3,7 @@
 import cv2
 import numpy as np
 import sys # sysはPythonのインタプリタや実行環境に関する情報を扱うためのライブラリです。
+import time
 
 # モデルの中の訓練されたクラス
 classNames = {0: 'background',
@@ -23,14 +24,16 @@ classNames = {0: 'background',
               80: 'toaster', 81: 'sink', 82: 'refrigerator', 84: 'book', 85: 'clock',
               86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'}
 
-file_path = '/home/hashimoto/Videos/capture/human.mp4'
-video = cv2.VideoCapture(file_path)
+file_path = '/home/hashimoto/catkin_ws/src/tang/tang_detection/videos/yuki.mp4'
+video = cv2.VideoCapture(0)
 window_name = 'frame'
 delay = 1
+count = 0
+all_time = 0
  
 # モデルの読み込み
-model = cv2.dnn.readNetFromTensorflow('/home/hashimoto/catkin_ws/src/tang/tang_detection/models/frozen_inference_graph.pb',
-                                      '/home/hashimoto/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
+model = cv2.dnn.readNetFromTensorflow('/home/hashimoto/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v3_large_coco_2020_01_14/frozen_inference_graph.pb',
+                                      '/home/hashimoto/catkin_ws/src/tang/tang_detection/models/ssd_mobilenet_v3_large_coco_2020_01_14/ssd_mobilenet_v3_large_coco_2020_01_14.pbtxt')
 
 if not video.isOpened():
     sys.exit()
@@ -39,6 +42,8 @@ if not video.isOpened():
 # image = cv2.imread("image.jpeg")
 while True:
     ret, frame = video.read() # カメラの画像を１フレーム読み込み、frameに格納、retは読み込めたらtrueを格納する
+
+    start = time.time()
 
     # 画像の縦と横サイズを取得
     image_height, image_width = frame.shape[:2]
@@ -74,7 +79,11 @@ while True:
            cv2.rectangle(frame, (start_X, start_Y), (end_X, end_Y), (23, 230, 210), thickness=2)
  
            # (画像、文字列、開始座標、フォント、文字サイズ、色)を指定
-           cv2.putText(frame, class_name, (start_X, start_Y), cv2.FONT_ITALIC, (.005*image_width), (0, 0, 255))       
+           cv2.putText(frame, class_name, (start_X, start_Y), cv2.FONT_ITALIC, (.005*image_width), (0, 0, 255))   
+    elapsed_time = time.time() - start
+    count += 1
+    all_time += elapsed_time
+    print(1/(all_time/count), "fps")    
     
     if ret:
         cv2.imshow(window_name, frame)
