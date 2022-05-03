@@ -10,6 +10,7 @@ import rospy
 import roslib.packages
 from tang_msgs.msg import Command, Modechange
 from sensor_msgs.msg import Joy
+from sensor_msgs.msg import Imu
 
 # detectnet
 import jetson.inference
@@ -27,6 +28,8 @@ import sys
 import numpy as np
 from numpy.lib.function_base import copy
 import time
+from scipy.spatial.transform import Rotation
+import math
 
 # decimarion_filterのパラメータ
 decimate = rs.decimation_filter()
@@ -87,8 +90,9 @@ class DetectNet():
         # publisher
         self.pubmsg = PubMsg()
         # subscriber
-        self.joy_sub = rospy.Subscriber(
+        rospy.Subscriber(
             "current_param", Modechange, self.mode_callback, queue_size=1)
+        rospy.Subscriber("imu", Imu, self._imu_callback)
         # command type
         self.command = Command()
         self.param = Modechange()
@@ -100,6 +104,18 @@ class DetectNet():
         self.delta_t = 0.0
         self.human_input = np.array([0.0, 0.0, 0.0, 0.001, 0.0]).T
         self.prev_human_input = np.array([0.0, 0.0, 0.0, 0.001, 0.0]).T
+        # IMU Parameter
+        self._imu_data_raw = Imu()
+        self._heading_angle = 0.0
+    
+    def _quaternion_to_euler_zyx(self, q):
+        r = Rotation.from_quat([q.x, q.y, q.z, q.w])
+        return r.as_euler('xyz', degrees=True)
+    
+    def _imu_callback(self, imu_msg):
+        self._imu_data_raw = imu_msg
+        self._heading_angle  = self._quaternion_to_euler_zyx(self._imu_data_raw.orientation)[2]
+        print("角度", self._heading_angle)
 
     def get_filtered_frame(self, align, frames, max_dist):
         aligned_frames = align.process(frames)
@@ -241,8 +257,18 @@ class DetectNet():
                     rospy.loginfo("teleop mode")
                     r.sleep()
 
+                # TODO:robot_vw = imu_data
+                # robot_vw[0] = sqrt(imu_data.vel_x^2 + imu_data.vel_y^2)
+                # geometry_msgs/Vector3 linear_acceleration[0],[1]、x,y方向の加速度を時間積分して2乗して足す
+                # robot_vw[1] = ヨー軸の角速度
+                # geometry_msgs/Vector3 angular_velocityのどれがヨー軸の角速度？たぶん[2]
+                # このとき、これらのセンサ値の分散も入力の分散に足す？今回は無視する。論文では無視されている
                 elif (self.param.current_mode == 1):
                     self.estimate_human_position(cuda_mem)
+                    vel_x = self._imu_data_raw.linear_acceleration.x*self.delta_t
+                    vel_y = self._imu_data_raw.linear_acceleration.y*self.delta_t
+                    robot_vw[0] = math.sqrt(vel_x**2 + vel_y**2)
+                    robot_vw[1] = self._imu_data_raw.angular_velocity.z
                     if (self.command.is_human == 1):
                         self.command.depth = depth_frame.get_distance(
                             int(self.command.pos_x), int(self.command.pos_y))
