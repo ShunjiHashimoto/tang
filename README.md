@@ -9,7 +9,7 @@ CuGo V3を使って収穫サポートロボットTANGを作る
 
 ## 必要なパッケージ
 ### Ubuntu serverをダウンロードし、SDカードに書き込む
-Ubuntu serverをダウンロード
+Ubuntuが入ったPCでUbuntu serverをダウンロード
 ```bash
 $ wget http://cdimage.ubuntu.com/releases/bionic/release/ubuntu-18.04.5-preinstalled-server-arm64+raspi3.img.xz
 ```
