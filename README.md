@@ -15,7 +15,7 @@ wget http://cdimage.ubuntu.com/releases/bionic/release/ubuntu-18.04.5-preinstall
 ```
 ファイルを解凍
 ```bash
-hashimoto@hashimoto:~/Downloads$ xz -dv ubuntu-18.04.5-preinstalled-server-arm64+raspi3.img.xz 
+$ xz -dv ubuntu-18.04.5-preinstalled-server-arm64+raspi3.img.xz 
 ```
 Raspberry Pi Imagerを使って書き込む
 書き込むimgファイルは先程選択したファイルを選択後、書き込む
