@@ -8,6 +8,9 @@ import RPi.GPIO as GPIO
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
 
+# circle pitch
+Pitch = 6.1850105367549055/2
+
 def add_right_gear_count(channel):
     cnt_list[0]+=1
 
@@ -17,8 +20,12 @@ def add_left_gear_count(channel):
 def calc_velocity(count, time):
     return Pitch*count/time
 
-# circle pitch
-Pitch = 6.1850105367549055
+BTN_BACK = 0x0100
+BTN_Y = 0x0001
+BTN_A = 0x0002
+AXS_MAX = 1.0
+AXS_OFF = 0.0
+
 cnt_list = [0, 0]
 
 # modeを選択
@@ -51,8 +58,8 @@ left_gear_pin = 27
 GPIO.setup(right_gear_pin, GPIO.IN)
 GPIO.setup(left_gear_pin, GPIO.IN)
 # bouncetimeは割り込みを行った後設定された時間は割り込みを検知しないという糸
-GPIO.add_event_detect(right_gear_pin, GPIO.RISING, bouncetime=1)
-GPIO.add_event_detect(left_gear_pin, GPIO.RISING, bouncetime=1)
+GPIO.add_event_detect(right_gear_pin, GPIO.BOTH, bouncetime=1)
+GPIO.add_event_detect(left_gear_pin, GPIO.BOTH, bouncetime=1)
 # コールバック関数登録
 GPIO.add_event_callback(right_gear_pin, add_right_gear_count) 
 GPIO.add_event_callback(left_gear_pin, add_left_gear_count) 
@@ -64,19 +71,34 @@ class TangController():
         self.speed = rospy.get_param("/tang_teleop/speed")
         self.dt = 0.1
         self.d = 0.0 # distance 
+        self.joy_sub = rospy.Subscriber("joy", Joy, self.joy_callback, queue_size=1)
+        self.prev_time = 0.0
+        self.count_sum = 0
     
         
     def mode_change(self):
+        now = time.time()
+        self.dt = now - self.prev_time
+        self.prev_time = now
+        if rospy.is_shutdown(): return
+        # if self.d > 1000: 
+        #     p_r.start(0)
+        #     p_l.start(0)
+        #     return
         if self.main == 0:
             motor_l = self.joy_l
             motor_r = self.joy_r
             vel_r = calc_velocity(cnt_list[0], self.dt )
             vel_l = calc_velocity(cnt_list[1], self.dt )
             v = (vel_l+vel_r)/2
+            print(cnt_list)
+            self.count_sum += cnt_list[0]
+            print("distance", self.count_sum*Pitch)
+            cnt_list[0] = cnt_list[1] = 0
             self.d += v*self.dt
 
-            print("distance", self.d)
-            # time.sleep(0.1)
+            print("distance: %d, velocity: %lf", self.d, v)
+            print("delta_time", self.dt)
             if motor_l >= 0 and motor_r >= 0:
                 GPIO.output(gpio_pin_r, GPIO.HIGH)
                 GPIO.output(gpio_pin_l, GPIO.HIGH)
@@ -113,7 +135,7 @@ class TangController():
         else:
             joy_l = 0
             
-        joy_r = joy_msg.axes[4]
+        joy_r = joy_msg.axes[3]
         if(joy_r <= -AXS_OFF):
             joy_r += AXS_OFF
         elif(joy_r >= AXS_OFF):
@@ -143,7 +165,7 @@ def main():
     rospy.init_node("tang_teleop", anonymous=True)
     instance = TangController()
     rate = rospy.Rate(10)
-    while not rospy.is_shutdown() or instance.dt < 1000:
+    while not rospy.is_shutdown():
         instance.mode_change()
         rate.sleep()
     rospy.spin()

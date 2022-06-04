@@ -20,26 +20,14 @@ def calc_velocity(count, time):
 
 def main():
     GPIO.setmode(GPIO.BCM)
-    gpio_pin_r = 22
-    GPIO.setup(gpio_pin_r, GPIO.OUT)
-    GPIO.setup(11, GPIO.OUT, initial = GPIO.LOW)
-    GPIO.setup(19, GPIO.OUT, initial = GPIO.LOW)
-    GPIO.setup(21, GPIO.OUT, initial = GPIO.LOW)
-    GPIO.setup(16, GPIO.OUT, initial = GPIO.LOW)
 
     # OUTPUT_GPIO = 27 # LEDに接続するGPIO番号
 
     # アナログピン, ANA2(RIGHT) = 32
-    pwm_pin_r = 12
-    GPIO.setup(pwm_pin_r, GPIO.OUT)
-    p_r = GPIO.PWM(pwm_pin_r, 40)
-    p_r.start(0)
-
-    lcd = lcd_display.lcd()
     t = 0.1
 
     # 割り込みイベント設定
-    right_gear_pin = 17
+    right_gear_pin = 23
     left_gear_pin = 27
     GPIO.setup(right_gear_pin, GPIO.IN)
     GPIO.setup(left_gear_pin, GPIO.IN)
