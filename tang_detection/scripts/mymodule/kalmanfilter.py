@@ -37,6 +37,7 @@ class KalmanFilter():
     @note 状態方程式におけるfx
     """
     def fx(self, xt_1, robot_v, robot_w):
+        if(self.time_interval>1.0): self.time_interval = 0.1
         t = self.time_interval
         delta_theta = robot_w*t
         delta_l = 2*(robot_v/robot_w)*math.sin(delta_theta/2)
@@ -52,6 +53,7 @@ class KalmanFilter():
                           zt_1, \
                           vx*math.cos(delta_theta) + vy*math.sin(delta_theta) -robot_v, \
                           - vx * math.sin(delta_theta) + vy * math.cos(delta_theta)])
+        # print("delta_theta", format(delta_theta, '.3f'), "delta_l: ", format(delta_l, '.3f'), "delta_x" , format(delta_x, '.3f'), "delta_y", format(delta_y, '.3f'))
         return xt
 
     """
@@ -104,22 +106,38 @@ class KalmanFilter():
         cos_ = math.cos(delta_theta)
         sin_ = math.sin(delta_theta)
         t = self.time_interval
+        if(robot_omega < 0.01 and robot_omega > -0.01):
+            return np.array([ [2.0, 0.0, 0.0, 2*t, 0.0], 
+                          [0.0, 2.0, 0.0, 0.0, 2*t], 
+                          [0.0, 0.0, 1.0, 0.0, 0.0],
+                          [1/t, 0.0, 0.0, 1.0, 0.0],
+                          [0.0, 1/t, 0.0, 0.0, 1.0] ])
         return np.array([ [2*cos_, 2*sin_, 0.0, 2*t*cos_, 2*t*sin_], 
                           [-2*sin_, 2*cos_, 0.0, -2*t*sin_, 2*t*cos_], 
                           [0.0, 0.0, 1.0, 0.0, 0.0],
                           [cos_/t, sin_/t, 0.0, cos_, sin_],
                           [-sin_/t, cos_/t, 0.0, -sin_, cos_] ])
     
-    def matA(self, robot_omega):
-        delta_theta = robot_omega*self.time_interval
+    def matA(self, xt, v, w):
+        delta_theta = w*self.time_interval
         cos_ = math.cos(delta_theta)
         sin_ = math.sin(delta_theta)
         t = self.time_interval
-        return np.array([ [2*t*cos_, 2*t*sin_], 
-                          [-2*t*sin_, 2*t*cos_], 
+        x = xt[0]
+        y = xt[1]
+        vx = xt[3]
+        vy = xt[4]
+        if(w < 0.01 and w > -0.01):
+            return np.array([[-t, 0.0],
+                             [0.0, 0.0],
+                             [0.0, 0.0],
+                             [-1.0, 0.0],
+                             [0.0, 0.0] ])
+        return np.array([ [-sin_/w, -(x + vx*t)*t*sin_ + (y + vy*t)*t*cos_ + (v/w)*(sin_/w - t*cos_)], 
+                          [(1-cos_)/w, -(x + vx*t)*t*cos_ - (y + vy*t)*t*sin_ - (v/w)*(cos_/w + t*sin_)], 
                           [0.0, 0.0],
-                          [cos_, sin_],
-                          [-sin_, cos_] ])
+                          [-1.0, -vx*t*sin_+vy*t*cos_],
+                          [0.0, -vx*t*cos_-vy*t*sin_] ])
 
     """
     @fn motion_update()
@@ -131,7 +149,7 @@ class KalmanFilter():
         self.belief.mean = self.fx(mean_t_1, robot_vw[0], robot_vw[1])
         M = self.matM() # 入力のばらつき(x, yの速度のばらつき)
         F = self.matF(robot_vw[1]) # xがずれたときに移動後のxがどれだけずれるか
-        A = self.matA(robot_vw[1]) # 人への入力u(x, yの速度)がずれたとき、xがどれだけずれるか 
+        A = self.matA(self.belief.mean, robot_vw[0], robot_vw[1]) # 人への入力u(x, yの速度)がずれたとき、xがどれだけずれるか 
         self.belief.cov = np.dot(F, np.dot(cov_t_1, F.T)) + np.dot(A, np.dot(M, A.T))
 
     def mat_h(self):

@@ -7,7 +7,7 @@
 
   <node name="tang_detection" pkg="tang_detection" type="human_detection.py" output="screen">
     <param name = "threshold" type = "double" value = "2.0"/>  <!-- これより遠い距離の画素を無視する -->
-    <param name = "debug" type="bool" value="0"/>
+    <param name = "debug" type="bool" value="1"/>
   </node>
 
 </launch>

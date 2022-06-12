@@ -30,6 +30,7 @@ from numpy.lib.function_base import copy
 import time
 from scipy.spatial.transform import Rotation
 import math
+import RPi.GPIO as GPIO
 
 # decimarion_filterのパラメータ
 decimate = rs.decimation_filter()
@@ -52,6 +53,30 @@ WIDTH = 640
 HEIGHT = 480
 FPS = 60
 
+# Calc Gear Sensor Parameter
+def add_right_gear_count(channel):
+    cnt_list[0]+=1
+
+def add_left_gear_count(channel):
+    cnt_list[1]+=1
+
+def calc_velocity(count, time):
+    return Pitch*count/time #[m/s]
+
+Pitch = 6.1850105367549055/2/1000
+cnt_list = [0, 0]
+GPIO.setmode(GPIO.BCM)
+# 割り込みイベント設定
+right_gear_pin = 23
+left_gear_pin = 27
+GPIO.setup(right_gear_pin, GPIO.IN)
+GPIO.setup(left_gear_pin, GPIO.IN)
+# bouncetimeは割り込みを行った後設定された時間は割り込みを検知しないという糸
+GPIO.add_event_detect(right_gear_pin, GPIO.BOTH, bouncetime=1)
+GPIO.add_event_detect(left_gear_pin, GPIO.BOTH, bouncetime=1)
+# コールバック関数登録
+GPIO.add_event_callback(right_gear_pin, add_right_gear_count) 
+GPIO.add_event_callback(left_gear_pin, add_left_gear_count) 
 
 class PubMsg():
     """
@@ -96,17 +121,20 @@ class DetectNet():
         # command type
         self.command = Command()
         self.param = Modechange()
-        self.param.realsense_thresh = 6.0
+        self.param.realsense_thresh = 3.0
         self.param.current_mode = 1
         self.debug = rospy.get_param("/tang_detection/debug")
         # KalmanFileter Parameter
         self.prev_time = 0.0
         self.delta_t = 0.0
-        self.human_input = np.array([0.0, 0.0, 0.0, 0.001, 0.0]).T
+        self.human_input = np.array([0.0, 0.0, 0.0, 0.0, 0.0]).T
         self.prev_human_input = np.array([0.0, 0.0, 0.0, 0.001, 0.0]).T
         # IMU Parameter
         self._imu_data_raw = Imu()
         self._heading_angle = 0.0
+        # Calc Gear Sensor
+        self.prev_time = 0.0
+        self.dt = 0.1
     
     def _quaternion_to_euler_zyx(self, q):
         r = Rotation.from_quat([q.x, q.y, q.z, q.w])
@@ -115,7 +143,6 @@ class DetectNet():
     def _imu_callback(self, imu_msg):
         self._imu_data_raw = imu_msg
         self._heading_angle  = self._quaternion_to_euler_zyx(self._imu_data_raw.orientation)[2]
-        print("角度", self._heading_angle)
 
     def get_filtered_frame(self, align, frames, max_dist):
         aligned_frames = align.process(frames)
@@ -204,9 +231,8 @@ class DetectNet():
               self.prev_human_input[0])/self.delta_t
         vy = (position_3d_from_robot[1] -
               self.prev_human_input[1])/self.delta_t
-        human_input = np.array(
+        self.human_input = np.array(
             [position_3d_from_robot[0], position_3d_from_robot[1], position_3d_from_robot[2], vx, vy]).T
-        return human_input
 
     def main_loop(self):
         """
@@ -257,27 +283,28 @@ class DetectNet():
                     rospy.loginfo("teleop mode")
                     r.sleep()
 
-                # TODO:robot_vw = imu_data
-                # robot_vw[0] = sqrt(imu_data.vel_x^2 + imu_data.vel_y^2)
-                # geometry_msgs/Vector3 linear_acceleration[0],[1]、x,y方向の加速度を時間積分して2乗して足す
-                # robot_vw[1] = ヨー軸の角速度
-                # geometry_msgs/Vector3 angular_velocityのどれがヨー軸の角速度？たぶん[2]
-                # このとき、これらのセンサ値の分散も入力の分散に足す？今回は無視する。論文では無視されている
                 elif (self.param.current_mode == 1):
                     self.estimate_human_position(cuda_mem)
-                    vel_x = self._imu_data_raw.linear_acceleration.x*self.delta_t
-                    vel_y = self._imu_data_raw.linear_acceleration.y*self.delta_t
-                    robot_vw[0] = math.sqrt(vel_x**2 + vel_y**2)
+                    vel_r = calc_velocity(cnt_list[0], self.delta_t )
+                    vel_l = calc_velocity(cnt_list[1], self.delta_t )
+                    robot_vw[0] = (vel_l+vel_r)/2
+                    if(robot_vw[0] == 0.0):
+                        robot_vw[0] = 0.000001
+                    cnt_list[0] = cnt_list[1] = 0
                     robot_vw[1] = self._imu_data_raw.angular_velocity.z
+                    if(robot_vw[1] == 0.0):
+                        robot_vw[1] = 0.000001
                     if (self.command.is_human == 1):
                         self.command.depth = depth_frame.get_distance(
                             int(self.command.pos_x), int(self.command.pos_y))
-                        human_input = self.calc_human_input(color_intr)
+                        self.calc_human_input(color_intr)
                         human_pos_beleif = kalman.main_loop(
-                            human_input, robot_vw, self.delta_t)
+                            self.human_input, robot_vw, self.delta_t)
                     else:
                         human_pos_beleif = kalman.estimation_nothing_human(
                             robot_vw, self.delta_t)
+                        self.command.depth = human_pos_beleif.mean[0]
+                        # TODO:視野外に人が行ったときに、その位置を予測できてもカメラ座標系に変換できない。
 
                     self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
                                                       human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
@@ -285,7 +312,7 @@ class DetectNet():
                     
                     if (self.debug):
                         rospy.loginfo(
-                            "human_input: x:%lf, y:%lf, z:%lf", human_input[0], human_input[1], human_input[2])
+                            "human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
                         rospy.logwarn(
                             "estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
                         self.render_image(
