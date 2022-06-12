@@ -229,12 +229,9 @@ class DetectNet():
         position_3d = rs.rs2_deproject_pixel_to_point(color_intr, [int(pose.x), int(pose.y)], pose.z)
         position_3d_from_robot = self.trans_camera_to_robot(position_3d)
         # 推定開始
-        vx = (position_3d_from_robot[0] -
-              self.prev_human_input[0])/self.delta_t
-        vy = (position_3d_from_robot[1] -
-              self.prev_human_input[1])/self.delta_t
-        self.human_input = np.array(
-            [position_3d_from_robot[0], position_3d_from_robot[1], position_3d_from_robot[2], vx, vy]).T
+        vx = (position_3d_from_robot.x - self.prev_human_input[0])/self.delta_t
+        vy = (position_3d_from_robot.y - self.prev_human_input[1])/self.delta_t
+        self.human_input = np.array([position_3d_from_robot.x, position_3d_from_robot.y, position_3d_from_robot.z, vx, vy]).T
         return position_3d_from_robot
 
     def main_loop(self):
@@ -296,9 +293,9 @@ class DetectNet():
 
                     # 人の位置をPub、もし人が見えていれば観測値をPub、見えなければ推測値をPubする    
                     if (self.command.is_human == 1):
+                        self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel)
                         human_pos_beleif = kalman.main_loop(self.human_input, robot_vw, self.delta_t)
                         self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
-                        self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel)
                     else:
                         human_pos_beleif = kalman.estimation_nothing_human(robot_vw, self.delta_t)
                         self.command.human_point.x = human_pos_beleif.mean[0]
