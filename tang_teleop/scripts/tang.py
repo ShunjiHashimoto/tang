@@ -119,7 +119,7 @@ class TangController():
                 rospy.logwarn("DutyCycle is over 100")
             return
 
-        elif self.main == 3:
+        elif self.main == 6:
             motor_r = motor_l = 0
             if (self.cmdvel_from_imu.angular.z <= 0.1 and self.cmdvel_from_imu.angular.z >= -0.1):
                 rospy.logwarn("Stop")
@@ -157,7 +157,8 @@ class TangController():
         @fn p_control()
         @details P制御
         """
-        p_gain = 0.04
+        # p_gain = 0.04
+        p_gain = 0.2
         d_gain = 1.0
         current_command = p_gain * (self.ref_pos - cur_pos) + d_gain*((self.ref_pos - cur_pos) - self.prev_command)/self.dt
         self.prev_command = self.ref_pos - cur_pos
@@ -197,7 +198,7 @@ class TangController():
         else:
             joy_l = 0
             
-        joy_r = joy_msg.axes[4]
+        joy_r = joy_msg.axes[3]
         if(joy_r <= -AXS_OFF):
             joy_r += AXS_OFF
         elif(joy_r >= AXS_OFF):
