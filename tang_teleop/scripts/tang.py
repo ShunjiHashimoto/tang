@@ -96,11 +96,12 @@ class TangController():
             # コマンドの制御量を比例制御で決める
             self.command = self.p_control(self.cmd.human_point.y)
             if (abs(self.command) > motor_r):
-                self.command = 0
-
+                self.command = 20
+            print(self.cmd.human_point.x)
             # 80cm以内であれば止まる
-            if self.cmd.human_point.x <= self.depth_min or self.cmd.is_human == 0:
-                rospy.logwarn("Stop")
+            # if self.cmd.human_point.x <= self.depth_min or self.cmd.is_human == 0:
+            if self.cmd.human_point.x <= self.depth_min and self.cmd.human_point.x > 0.0:
+                rospy.logwarn("Stop: %lf", self.cmd.human_point.x)
                 motor_r = motor_l = 0
             elif (self.command < 0):
                 motor_r += self.command
@@ -158,11 +159,12 @@ class TangController():
         @details P制御
         """
         # p_gain = 0.04
-        p_gain = 0.2
+        p_gain = 50.0
         d_gain = 1.0
         current_command = p_gain * (self.ref_pos - cur_pos) + d_gain*((self.ref_pos - cur_pos) - self.prev_command)/self.dt
         self.prev_command = self.ref_pos - cur_pos
-        return current_command
+        print("diff between cur and ref", self.ref_pos - cur_pos)
+        return -current_command
     
     def cmd_callback(self, msg):
         # 人の位置とサイズを得る
