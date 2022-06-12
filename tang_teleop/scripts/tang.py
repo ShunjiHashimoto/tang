@@ -49,10 +49,8 @@ class TangController():
         self.btn = self.joy_l = self.joy_r = 0
         self.current_param = Modechange()
         self.current_param.realsense_thresh = 4.0
-        self.main = 3
-        self.ref_pos = 350
-        self.max_area = rospy.get_param("/tang_teleop/max_area")
-        self.max_area_red = rospy.get_param("/tang_teleop/max_area_red")
+        self.main = 0
+        self.ref_pos = 0.0
         self.speed = rospy.get_param("/tang_teleop/speed")
         self.prev_command = 0
         self.command = 0
@@ -89,19 +87,19 @@ class TangController():
         
         elif self.main == 1:
             # 速度を距離に従って減衰させる、3m以内で減衰開始する
-            if(self.cmd.depth >= 3):
+            if(self.cmd.human_point.x >= 0.7):
                 command_depth = 1.0
             else:
-                command_depth = self.cmd.depth / 3
+                command_depth = self.cmd.human_point.x / 0.7
             motor_r = motor_l = self.speed * command_depth
             
             # コマンドの制御量を比例制御で決める
-            self.command = self.p_control(self.cmd.pos_x)
+            self.command = self.p_control(self.cmd.human_point.y)
             if (abs(self.command) > motor_r):
                 self.command = 0
 
             # 80cm以内であれば止まる
-            if self.cmd.depth <= self.depth_min or self.cmd.is_human == 0:
+            if self.cmd.human_point.x <= self.depth_min or self.cmd.is_human == 0:
                 rospy.logwarn("Stop")
                 motor_r = motor_l = 0
             elif (self.command < 0):
@@ -119,25 +117,6 @@ class TangController():
                 p_l.ChangeDutyCycle(motor_l)
             except:
                 rospy.logwarn("DutyCycle is over 100")
-            return
-    
-        elif self.main == 2:
-            motor_r = motor_l = self.speed
-            if self.cmd.max_area == 0: return
-            if (self.cmd.max_area >= self.max_area_red or self.cmd.max_area < 60):
-                rospy.logwarn("Stop")
-                motor_r = motor_l = 0
-            elif (self.command < 0):
-                motor_r += self.command
-                rospy.loginfo(
-                    "motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
-            elif (self.command >= 0):
-                motor_l -= self.command
-                rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
-            GPIO.output(gpio_pin_r, GPIO.HIGH)
-            GPIO.output(gpio_pin_l, GPIO.HIGH)
-            p_r.ChangeDutyCycle(motor_r)
-            p_l.ChangeDutyCycle(motor_l)
             return
 
         elif self.main == 3:

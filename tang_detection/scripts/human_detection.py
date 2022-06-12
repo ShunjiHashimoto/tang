@@ -11,6 +11,7 @@ import roslib.packages
 from tang_msgs.msg import Command, Modechange
 from sensor_msgs.msg import Joy
 from sensor_msgs.msg import Imu
+from geometry_msgs.msg import Point
 
 # detectnet
 import jetson.inference
@@ -121,6 +122,7 @@ class DetectNet():
         # command type
         self.command = Command()
         self.param = Modechange()
+        self.human_point_pixel = Point()
         self.param.realsense_thresh = 3.0
         self.param.current_mode = 1
         self.debug = rospy.get_param("/tang_detection/debug")
@@ -132,9 +134,6 @@ class DetectNet():
         # IMU Parameter
         self._imu_data_raw = Imu()
         self._heading_angle = 0.0
-        # Calc Gear Sensor
-        self.prev_time = 0.0
-        self.dt = 0.1
     
     def _quaternion_to_euler_zyx(self, q):
         r = Rotation.from_quat([q.x, q.y, q.z, q.w])
@@ -171,7 +170,11 @@ class DetectNet():
         return delta_t
 
     def trans_camera_to_robot(self, pos_3d):
-        return [pos_3d[2], -pos_3d[0], -pos_3d[1]]
+        point = Point()
+        point.x = pos_3d[2]
+        point.y = -pos_3d[0]
+        point.z = -pos_3d[1]
+        return point
 
     def trans_robot_to_camera(self, pos_3d):
         return [-pos_3d[1], -pos_3d[2], pos_3d[0]]
@@ -212,20 +215,19 @@ class DetectNet():
                 self.command.is_human = 1
 
         # exit on input/output EOS
+        # TODO: human_posを[m]でpubする
         if not self.input.IsStreaming() and self.command.is_human == 1:
-            self.command.pos_x = human_pos[0]  # [pixel]
-            self.command.pos_y = human_pos[1]  # [pixel]
+            self.human_point_pixel.x = human_pos[0]  # [pixel]
+            self.human_point_pixel.y = human_pos[1]  # [pixel]
             self.command.max_area = max_area
         else:
             self.command.max_area = 0
             self.command.is_human = 0
         return
 
-    def calc_human_input(self, color_intr):
-        position_3d = rs.rs2_deproject_pixel_to_point(
-            color_intr, [int(self.command.pos_x), int(self.command.pos_y)], self.command.depth)
-        position_3d_from_robot = self.trans_camera_to_robot(
-            position_3d)
+    def calc_human_input(self, color_intr, pose):
+        position_3d = rs.rs2_deproject_pixel_to_point(color_intr, [int(pose.x), int(pose.y)], pose.z)
+        position_3d_from_robot = self.trans_camera_to_robot(position_3d)
         # 推定開始
         vx = (position_3d_from_robot[0] -
               self.prev_human_input[0])/self.delta_t
@@ -233,6 +235,7 @@ class DetectNet():
               self.prev_human_input[1])/self.delta_t
         self.human_input = np.array(
             [position_3d_from_robot[0], position_3d_from_robot[1], position_3d_from_robot[2], vx, vy]).T
+        return position_3d_from_robot
 
     def main_loop(self):
         """
@@ -254,7 +257,7 @@ class DetectNet():
         color_intr = rs.video_stream_profile(
             profile.get_stream(rs.stream.color)).get_intrinsics()
 
-        r = rospy.Rate(20)  # 10hz
+        r = rospy.Rate(10)  # 10hz
 
         # KalmanFileter
         robot_vw = np.array([0.000001, 0.000001])
@@ -269,17 +272,14 @@ class DetectNet():
                 max_dist = self.command.depth_thresh/depth_scale
                 # フレーム取得
                 frames = pipeline.wait_for_frames()
-                frame, depth_frame = self.get_filtered_frame(
-                    align, frames, max_dist)
+                frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
                 if not frame.any():
                     continue
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(frame)
                 self.delta_t = self.calc_delta_time()
 
-                # try:
                 if(self.param.current_mode == 0):
-                    # 0 = teleopmode
                     rospy.loginfo("teleop mode")
                     r.sleep()
 
@@ -288,49 +288,41 @@ class DetectNet():
                     vel_r = calc_velocity(cnt_list[0], self.delta_t )
                     vel_l = calc_velocity(cnt_list[1], self.delta_t )
                     robot_vw[0] = (vel_l+vel_r)/2
-                    if(robot_vw[0] == 0.0):
-                        robot_vw[0] = 0.000001
+                    if(robot_vw[0] == 0.0): robot_vw[0] = 0.000001
                     cnt_list[0] = cnt_list[1] = 0
                     robot_vw[1] = self._imu_data_raw.angular_velocity.z
                     if(robot_vw[1] == 0.0):
                         robot_vw[1] = 0.000001
+
+                    # 人の位置をPub、もし人が見えていれば観測値をPub、見えなければ推測値をPubする    
                     if (self.command.is_human == 1):
-                        self.command.depth = depth_frame.get_distance(
-                            int(self.command.pos_x), int(self.command.pos_y))
-                        self.calc_human_input(color_intr)
-                        human_pos_beleif = kalman.main_loop(
-                            self.human_input, robot_vw, self.delta_t)
+                        human_pos_beleif = kalman.main_loop(self.human_input, robot_vw, self.delta_t)
+                        self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
+                        self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel)
                     else:
-                        human_pos_beleif = kalman.estimation_nothing_human(
-                            robot_vw, self.delta_t)
-                        self.command.depth = human_pos_beleif.mean[0]
-                        # TODO:視野外に人が行ったときに、その位置を予測できてもカメラ座標系に変換できない。
+                        human_pos_beleif = kalman.estimation_nothing_human(robot_vw, self.delta_t)
+                        self.command.human_point.x = human_pos_beleif.mean[0]
+                        self.command.human_point.y = human_pos_beleif.mean[1]
+                        self.command.human_point.z = human_pos_beleif.mean[2]
 
                     self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
                                                       human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
                     self.pubmsg.pub(self.command)
                     
+                    # Debugパラメータ
                     if (self.debug):
                         rospy.loginfo(
                             "human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
                         rospy.logwarn(
                             "estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
-                        self.render_image(
-                            cuda_mem, self.command.pos_x, self.command.pos_y, (0, 0, 127, 200))
+                        self.render_image(cuda_mem, self.human_point_pixel.x, self.human_point_pixel.y, (0, 0, 127, 200))
                         # estimated 3d_pos to 2d_pos
-                        estimated_3d_pos = (
-                            human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
-                        estimated_3d_pos = self.trans_robot_to_camera(
-                            estimated_3d_pos)
-                        estimated_point_to_pixel = rs.rs2_project_point_to_pixel(
-                            color_intr, estimated_3d_pos)
-                        self.render_image(
-                            cuda_mem, estimated_point_to_pixel[0], estimated_point_to_pixel[1], (0, 255, 127, 200))
+                        estimated_3d_pos = (human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
+                        estimated_3d_pos = self.trans_robot_to_camera(estimated_3d_pos)
+                        estimated_point_to_pixel = rs.rs2_project_point_to_pixel(color_intr, estimated_3d_pos)
+                        self.render_image(cuda_mem, estimated_point_to_pixel[0], estimated_point_to_pixel[1], (0, 255, 127, 200))
                         self.output_image()
 
-                # except:
-                #     rospy.logwarn("nothing target")
-                #     continue
         finally:
             pipeline.stop()
 
