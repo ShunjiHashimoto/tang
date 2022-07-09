@@ -123,7 +123,7 @@ class DetectNet():
         self.command = Command()
         self.param = Modechange()
         self.human_point_pixel = Point()
-        self.param.realsense_thresh = 3.0
+        self.param.realsense_thresh = 1.8
         self.param.current_mode = 1
         self.debug = rospy.get_param("/tang_detection/debug")
         # KalmanFileter Parameter
@@ -182,10 +182,10 @@ class DetectNet():
     def mode_callback(self, msg):
         self.param = msg
 
-    def render_image(self, img, cx, cy, color):
+    def render_image(self, img, cx, cy, color, depth_size):
         # render the image
-        jetson.utils.cudaDrawCircle(
-            img, (cx, cy), 50, color)  # (cx,cy), radius, color
+        size = abs(1/depth_size)*40
+        jetson.utils.cudaDrawCircle(img, (cx, cy), size, color)  # (cx,cy), radius, color
         self.output.Render(img)
 
     def output_image(self):
@@ -271,13 +271,14 @@ class DetectNet():
                 frames = pipeline.wait_for_frames()
                 frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
                 if not frame.any():
-                    continue
+                    print("frame nothing")
+                    # continue
                 # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(frame)
                 self.delta_t = self.calc_delta_time()
 
                 if(self.param.current_mode == 0):
-                    rospy.loginfo("teleop mode")
+                    # rospy.loginfo("teleop mode")
                     r.sleep()
 
                 elif (self.param.current_mode == 1):
@@ -301,23 +302,30 @@ class DetectNet():
                         self.command.human_point.x = human_pos_beleif.mean[0]
                         self.command.human_point.y = human_pos_beleif.mean[1]
                         self.command.human_point.z = human_pos_beleif.mean[2]
-
+                    
+                    # if(human_pos_beleif.mean[0] < 0.0):
+                    #     human_pos_beleif.mean[0] = -1.0
+                    # elif(human_pos_beleif.mean[0] > 10.0):
+                    #     human_pos_beleif.mean[0] = 10.0
+                    # if(human_pos_beleif.mean[1] < -10.0):
+                    #     human_pos_beleif.mean[1] = -10.0
+                    # elif(human_pos_beleif.mean[1] > 10.0):
+                    #     human_pos_beleif.mean[1] = 10.0    
+                    
                     self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
                                                       human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
                     self.pubmsg.pub(self.command)
                     
                     # Debugパラメータ
                     if (self.debug):
-                        rospy.loginfo(
-                            "human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
-                        rospy.logwarn(
-                            "estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
-                        self.render_image(cuda_mem, self.human_point_pixel.x, self.human_point_pixel.y, (0, 0, 127, 200))
+                        rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
+                        rospy.logwarn("estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
+                        self.render_image(cuda_mem, self.human_point_pixel.x, self.human_point_pixel.y, (0, 0, 127, 200), self.human_point_pixel.z+0.1)
                         # estimated 3d_pos to 2d_pos
                         estimated_3d_pos = (human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
                         estimated_3d_pos = self.trans_robot_to_camera(estimated_3d_pos)
                         estimated_point_to_pixel = rs.rs2_project_point_to_pixel(color_intr, estimated_3d_pos)
-                        self.render_image(cuda_mem, estimated_point_to_pixel[0], estimated_point_to_pixel[1], (0, 255, 127, 200))
+                        self.render_image(cuda_mem, estimated_point_to_pixel[0], estimated_point_to_pixel[1], (0, 255, 127, 200), human_pos_beleif.mean[0]+0.1)
                         self.output_image()
 
         finally:

@@ -31,26 +31,26 @@ cnt_list = [0, 0]
 # modeを選択
 GPIO.setmode(GPIO.BCM)
 
-gpio_pin_r = 18
-gpio_pin_l = 17
-# デジタル出力ピンを設定, 回転方向を決められる
-# DIG1 = 11(LEFT), DIG2 = 12(RIGHT)
-GPIO.setup(gpio_pin_r, GPIO.OUT)
-GPIO.setup(gpio_pin_l, GPIO.OUT)
+# gpio_pin_r = 18
+# gpio_pin_l = 17
+# # デジタル出力ピンを設定, 回転方向を決められる
+# # DIG1 = 11(LEFT), DIG2 = 12(RIGHT)
+# GPIO.setup(gpio_pin_r, GPIO.OUT)
+# GPIO.setup(gpio_pin_l, GPIO.OUT)
 
-output_pin_r = 12
-output_pin_l = 13
-# アナログ出力ピンを設定、output_pinを32,33に設定
-# ANA1 = 32(LEFT), ANA2 = 33(RIGHT)
-GPIO.setup(output_pin_r, GPIO.OUT)
-GPIO.setup(output_pin_l, GPIO.OUT)
-GPIO.output(output_pin_r, GPIO.LOW)
-GPIO.output(output_pin_l, GPIO.LOW)
-# PWMサイクルを50Hzに設定
-p_r = GPIO.PWM(output_pin_r, 50)
-p_l = GPIO.PWM(output_pin_l, 50)
-p_r.start(0)
-p_l.start(0)
+# output_pin_r = 12
+# output_pin_l = 13
+# # アナログ出力ピンを設定、output_pinを32,33に設定
+# # ANA1 = 32(LEFT), ANA2 = 33(RIGHT)
+# GPIO.setup(output_pin_r, GPIO.OUT)
+# GPIO.setup(output_pin_l, GPIO.OUT)
+# GPIO.output(output_pin_r, GPIO.LOW)
+# GPIO.output(output_pin_l, GPIO.LOW)
+# # PWMサイクルを50Hzに設定
+# p_r = GPIO.PWM(output_pin_r, 50)
+# p_l = GPIO.PWM(output_pin_l, 50)
+# p_r.start(0)
+# p_l.start(0)
 
 # 割り込みイベント設定
 right_gear_pin = 23
@@ -86,8 +86,8 @@ class TangController():
         #     p_l.start(0)
         #     return
         if self.main == 0:
-            motor_l = self.joy_l
-            motor_r = self.joy_r
+            # motor_l = self.joy_l
+            # motor_r = self.joy_r
             vel_r = calc_velocity(cnt_list[0], self.dt )
             vel_l = calc_velocity(cnt_list[1], self.dt )
             v = (vel_l+vel_r)/2
@@ -99,17 +99,17 @@ class TangController():
 
             print("distance: %d, velocity: %lf", self.d, v)
             print("delta_time", self.dt)
-            if motor_l >= 0 and motor_r >= 0:
-                GPIO.output(gpio_pin_r, GPIO.HIGH)
-                GPIO.output(gpio_pin_l, GPIO.HIGH)
-                p_r.ChangeDutyCycle(motor_r)
-                p_l.ChangeDutyCycle(motor_l)
-                # rospy.loginfo("Go! | motor_l : %d | motor_r: %d", motor_l, motor_r)
-            elif motor_l < 0 and motor_r < 0:
-                GPIO.output(gpio_pin_r, GPIO.LOW)
-                GPIO.output(gpio_pin_l, GPIO.LOW)
-                p_r.ChangeDutyCycle(-(motor_r))
-                p_l.ChangeDutyCycle(-(motor_l))
+            # if motor_l >= 0 and motor_r >= 0:
+            #     GPIO.output(gpio_pin_r, GPIO.HIGH)
+            #     GPIO.output(gpio_pin_l, GPIO.HIGH)
+            #     p_r.ChangeDutyCycle(motor_r)
+            #     p_l.ChangeDutyCycle(motor_l)
+            #     # rospy.loginfo("Go! | motor_l : %d | motor_r: %d", motor_l, motor_r)
+            # elif motor_l < 0 and motor_r < 0:
+            #     GPIO.output(gpio_pin_r, GPIO.LOW)
+            #     GPIO.output(gpio_pin_l, GPIO.LOW)
+            #     p_r.ChangeDutyCycle(-(motor_r))
+            #     p_l.ChangeDutyCycle(-(motor_l))
                 # rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
             return
 

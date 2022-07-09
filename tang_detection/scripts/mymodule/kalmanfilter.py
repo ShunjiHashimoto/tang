@@ -19,11 +19,21 @@ class KalmanFilter():
         self.belief   = multivariate_normal(mean=human_input, cov=np.diag([1e-10, 1e-10, 1e-10, 1e-10, 1e-10]))
         self.w_mean   = 0.0
         self.sigma_w  = 0.026099884 # 人の速度に対するノイズ
+        # self.sigma_w  = 0.1
         self.v_mean   = 0.0
         self.sigma_vx = 0.00008953076
         self.sigma_vy = 0.000000485137963
         self.sigma_vz = 0.00000001
         self.time_interval = 0.1
+
+    # 誤差楕円
+    # p：楕円の中心座標（x, y）
+    # cov：共分散
+    def sigma_ellipse(self, p, cov, n):  
+        # 固有値、固有ベクトルを求める
+        eig_vals, eig_vec = np.linalg.eig(cov)
+        ang = math.atan2(eig_vec[:,0][1], eig_vec[:,0][0])/math.pi*180
+        return Ellipse(p, width=2*n*math.sqrt(eig_vals[0]), height=2*n*math.sqrt(eig_vals[1]), fill=False, color="green", alpha=0.5)
     
     """
     @fn matG()
