@@ -18,12 +18,12 @@ class KalmanFilter():
     def __init__(self, human_input):
         self.belief   = multivariate_normal(mean=human_input, cov=np.diag([1e-10, 1e-10, 1e-10, 1e-10, 1e-10]))
         self.w_mean   = 0.0
-        self.sigma_w  = 0.026099884 # 人の速度に対するノイズ
-        # self.sigma_w  = 0.1
+        self.sigma_w  = 1.0 # 人の速度に対するノイズ
+        # self.sigma_w  = 0.026099884
         self.v_mean   = 0.0
-        self.sigma_vx = 0.00008953076
-        self.sigma_vy = 0.000000485137963
-        self.sigma_vz = 0.00000001
+        self.sigma_vx = 0.001 # depth
+        self.sigma_vy = 0.0001 # right and left
+        self.sigma_vz = 0.001 # tall
         self.time_interval = 0.1
 
     # 誤差楕円
@@ -117,16 +117,16 @@ class KalmanFilter():
         sin_ = math.sin(delta_theta)
         t = self.time_interval
         if(robot_omega < 0.01 and robot_omega > -0.01):
-            return np.array([ [2.0, 0.0, 0.0, 2*t, 0.0], 
-                          [0.0, 2.0, 0.0, 0.0, 2*t], 
+            return np.array([ [1.0, 0.0, 0.0, 1*t, 0.0], 
+                          [0.0, 1.0, 0.0, 0.0, 1*t], 
                           [0.0, 0.0, 1.0, 0.0, 0.0],
-                          [1/t, 0.0, 0.0, 1.0, 0.0],
-                          [0.0, 1/t, 0.0, 0.0, 1.0] ])
-        return np.array([ [2*cos_, 2*sin_, 0.0, 2*t*cos_, 2*t*sin_], 
-                          [-2*sin_, 2*cos_, 0.0, -2*t*sin_, 2*t*cos_], 
+                          [1, 0.0, 0.0, 1.0, 0.0],
+                          [0.0, 1, 0.0, 0.0, 1.0] ])
+        return np.array([ [cos_, sin_, 0.0, t*cos_, t*sin_], 
+                          [-sin_, cos_, 0.0, -t*sin_, t*cos_], 
                           [0.0, 0.0, 1.0, 0.0, 0.0],
-                          [cos_/t, sin_/t, 0.0, cos_, sin_],
-                          [-sin_/t, cos_/t, 0.0, -sin_, cos_] ])
+                          [cos_, sin_, 0.0, cos_, sin_],
+                          [-sin_, cos_, 0.0, -sin_, cos_] ])
     
     def matA(self, xt, v, w):
         delta_theta = w*self.time_interval
@@ -178,8 +178,14 @@ class KalmanFilter():
         H = self.mat_h()
         Q = self.matQ()
         I = np.eye(5)
-        K = np.dot(np.dot(cov_t_1, H.T), np.linalg.inv(Q + np.dot(np.dot(H, cov_t_1), H.T)))
         z_error = z - np.dot(self.matH(), mean_t_1)
+        # calc maharanobis distance
+        S = Q + np.dot(np.dot(H, cov_t_1), H.T)
+        d2 = np.dot(np.dot(z_error.T, np.linalg.inv(S)), z_error)
+        if(d2 > 5.99): 
+            print("out layer", d2)
+            return 
+        K = np.dot(np.dot(cov_t_1, H.T), np.linalg.inv(S))
         self.belief.mean += np.dot(K, z_error)  # 平均値更新
         self.belief.cov = (I - K.dot(H)).dot(self.belief.cov) # 共分散更新
     
