@@ -32,6 +32,7 @@ import time
 from scipy.spatial.transform import Rotation
 import math
 import RPi.GPIO as GPIO
+import matplotlib.pyplot as plt
 
 # decimarion_filterのパラメータ
 decimate = rs.decimation_filter()
@@ -123,17 +124,23 @@ class DetectNet():
         self.command = Command()
         self.param = Modechange()
         self.human_point_pixel = Point()
-        self.param.realsense_thresh = 1.8
+        self.param.realsense_thresh = 3.0
         self.param.current_mode = 1
         self.debug = rospy.get_param("/tang_detection/debug")
         # KalmanFileter Parameter
         self.prev_time = 0.0
         self.delta_t = 0.0
-        self.human_input = np.array([0.0, 0.0, 0.0, 0.0, 0.0]).T
-        self.prev_human_input = np.array([0.0, 0.0, 0.0, 0.001, 0.0]).T
+        self.human_input = np.array([1.0, 0.0, 0.0, 0.0, 0.0]).T
+        self.prev_human_input = np.array([1.0, 0.0, 0.0, 0.001, 0.0]).T
         # IMU Parameter
         self._imu_data_raw = Imu()
         self._heading_angle = 0.0
+        # graph setting
+        self.X_est = []
+        self.Y_est = []
+        self.X_true = []
+        self.Y_true = []
+        self.e_list = []
     
     def _quaternion_to_euler_zyx(self, q):
         r = Rotation.from_quat([q.x, q.y, q.z, q.w])
@@ -301,16 +308,7 @@ class DetectNet():
                         human_pos_beleif = kalman.estimation_nothing_human(robot_vw, self.delta_t)
                         self.command.human_point.x = human_pos_beleif.mean[0]
                         self.command.human_point.y = human_pos_beleif.mean[1]
-                        self.command.human_point.z = human_pos_beleif.mean[2]
-                    
-                    # if(human_pos_beleif.mean[0] < 0.0):
-                    #     human_pos_beleif.mean[0] = -1.0
-                    # elif(human_pos_beleif.mean[0] > 10.0):
-                    #     human_pos_beleif.mean[0] = 10.0
-                    # if(human_pos_beleif.mean[1] < -10.0):
-                    #     human_pos_beleif.mean[1] = -10.0
-                    # elif(human_pos_beleif.mean[1] > 10.0):
-                    #     human_pos_beleif.mean[1] = 10.0    
+                        self.command.human_point.z = human_pos_beleif.mean[2] 
                     
                     self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
                                                       human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
@@ -320,6 +318,12 @@ class DetectNet():
                     if (self.debug):
                         rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
                         rospy.logwarn("estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
+                        e = kalman.sigma_ellipse(human_pos_beleif.mean[0:2], human_pos_beleif.cov[0:2, 0:2], 5)
+                        self.e_list.append(e)
+                        self.X_true.append(self.human_input[0])
+                        self.Y_true.append(self.human_input[1])
+                        self.X_est.append(human_pos_beleif.mean[0])
+                        self.Y_est.append(human_pos_beleif.mean[1])
                         self.render_image(cuda_mem, self.human_point_pixel.x, self.human_point_pixel.y, (0, 0, 127, 200), self.human_point_pixel.z+0.1)
                         # estimated 3d_pos to 2d_pos
                         estimated_3d_pos = (human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
@@ -329,7 +333,23 @@ class DetectNet():
                         self.output_image()
 
         finally:
+            fig2 = plt.figure(figsize=(8,8)) 
+            ax2 = fig2.add_subplot(111)
+            ax2.set_aspect('equal')
+            ax2.set_xlim(-1, 4)
+            ax2.set_ylim(-4, 4)
+            ax2.set_xlabel("depth", fontsize=10)
+            ax2.set_ylabel("Y", fontsize=10)
+            ax2.grid(True)
+            ax2.legend(["Estimated", "Observed"])
+            for e in self.e_list:
+                ax2.add_patch(e)
+            ax2.plot(self.X_est, self.Y_est, marker = "*", c="green")
+            ax2.plot(self.X_true,self.Y_true , marker = "o", c="blue")
+            fig2.savefig("/home/hashimoto/catkin_ws/src/tang/tang_detection/scripts", dpi=300)
+            plt.show()
             pipeline.stop()
+
 
 
 if __name__ == "__main__":
