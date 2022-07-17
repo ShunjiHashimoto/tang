@@ -124,12 +124,12 @@ class DetectNet():
         self.command = Command()
         self.param = Modechange()
         self.human_point_pixel = Point()
+        self.human_point_pixel.z = 1.0
         self.param.realsense_thresh = 3.0
         self.param.current_mode = 1
         self.debug = rospy.get_param("/tang_detection/debug")
         # KalmanFileter Parameter
         self.prev_time = 0.0
-        self.delta_t = 0.0
         self.human_input = np.array([1.0, 0.0, 0.0, 0.0, 0.0]).T
         self.prev_human_input = np.array([1.0, 0.0, 0.0, 0.001, 0.0]).T
         # IMU Parameter
@@ -232,12 +232,12 @@ class DetectNet():
             self.command.is_human = 0
         return
 
-    def calc_human_input(self, color_intr, pose):
+    def calc_human_input(self, color_intr, pose, delta_t):
         position_3d = rs.rs2_deproject_pixel_to_point(color_intr, [int(pose.x), int(pose.y)], pose.z)
         position_3d_from_robot = self.trans_camera_to_robot(position_3d)
         # 推定開始
-        vx = (position_3d_from_robot.x - self.prev_human_input[0])/self.delta_t
-        vy = (position_3d_from_robot.y - self.prev_human_input[1])/self.delta_t
+        vx = (position_3d_from_robot.x - self.prev_human_input[0])/delta_t
+        vy = (position_3d_from_robot.y - self.prev_human_input[1])/delta_t
         self.human_input = np.array([position_3d_from_robot.x, position_3d_from_robot.y, position_3d_from_robot.z, vx, vy]).T
         return position_3d_from_robot
 
@@ -263,6 +263,20 @@ class DetectNet():
 
         r = rospy.Rate(10)  # 10hz
 
+        # realsensenの認識距離設定
+        self.command.depth_thresh = self.param.realsense_thresh
+        max_dist = self.command.depth_thresh/depth_scale
+
+        ## first calculate
+        # フレーム取得
+        frames = pipeline.wait_for_frames()
+        frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
+        # copy to CUDA memory
+        cuda_mem = jetson.utils.cudaFromNumpy(frame)
+        delta_t = self.calc_delta_time()
+        self.estimate_human_position(cuda_mem)
+        self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
+
         # KalmanFileter
         robot_vw = np.array([0.000001, 0.000001])
         kalman = kalmanfilter.KalmanFilter(self.human_input)
@@ -271,18 +285,13 @@ class DetectNet():
 
         try:
             while not rospy.is_shutdown():
-                # realsensenの認識距離設定
-                self.command.depth_thresh = self.param.realsense_thresh
-                max_dist = self.command.depth_thresh/depth_scale
-                # フレーム取得
                 frames = pipeline.wait_for_frames()
                 frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
                 if not frame.any():
                     print("frame nothing")
                     # continue
-                # copy to CUDA memory
                 cuda_mem = jetson.utils.cudaFromNumpy(frame)
-                self.delta_t = self.calc_delta_time()
+                delta_t = self.calc_delta_time()
 
                 if(self.param.current_mode == 0):
                     # rospy.loginfo("teleop mode")
@@ -290,8 +299,8 @@ class DetectNet():
 
                 elif (self.param.current_mode == 1):
                     self.estimate_human_position(cuda_mem)
-                    vel_r = calc_velocity(cnt_list[0], self.delta_t )
-                    vel_l = calc_velocity(cnt_list[1], self.delta_t )
+                    vel_r = calc_velocity(cnt_list[0], delta_t)
+                    vel_l = calc_velocity(cnt_list[1], delta_t)
                     robot_vw[0] = (vel_l+vel_r)/2
                     if(robot_vw[0] == 0.0): robot_vw[0] = 0.000001
                     cnt_list[0] = cnt_list[1] = 0
@@ -301,11 +310,12 @@ class DetectNet():
 
                     # 人の位置をPub、もし人が見えていれば観測値をPub、見えなければ推測値をPubする    
                     if (self.command.is_human == 1):
-                        self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel)
-                        human_pos_beleif = kalman.main_loop(self.human_input, robot_vw, self.delta_t)
+                        self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
+                        human_pos_beleif = kalman.main_loop(self.prev_human_input, self.human_input, robot_vw, delta_t)
                         self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
+                        print("分散：　", human_pos_beleif.cov)
                     else:
-                        human_pos_beleif = kalman.estimation_nothing_human(robot_vw, self.delta_t)
+                        human_pos_beleif = kalman.estimation_nothing_human(robot_vw, delta_t)
                         self.command.human_point.x = human_pos_beleif.mean[0]
                         self.command.human_point.y = human_pos_beleif.mean[1]
                         self.command.human_point.z = human_pos_beleif.mean[2] 
@@ -336,7 +346,7 @@ class DetectNet():
             fig2 = plt.figure(figsize=(8,8)) 
             ax2 = fig2.add_subplot(111)
             ax2.set_aspect('equal')
-            ax2.set_xlim(-1, 4)
+            ax2.set_xlim(-2, 4)
             ax2.set_ylim(-4, 4)
             ax2.set_xlabel("depth", fontsize=10)
             ax2.set_ylabel("Y", fontsize=10)
@@ -349,7 +359,6 @@ class DetectNet():
             fig2.savefig("/home/hashimoto/catkin_ws/src/tang/tang_detection/scripts", dpi=300)
             plt.show()
             pipeline.stop()
-
 
 
 if __name__ == "__main__":

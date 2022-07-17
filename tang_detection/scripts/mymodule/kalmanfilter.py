@@ -18,13 +18,12 @@ class KalmanFilter():
     def __init__(self, human_input):
         self.belief   = multivariate_normal(mean=human_input, cov=np.diag([1e-10, 1e-10, 1e-10, 1e-10, 1e-10]))
         self.w_mean   = 0.0
-        self.sigma_w  = 1.0 # 人の速度に対するノイズ
-        # self.sigma_w  = 0.026099884
+        self.sigma_w  = 0.05 # 人の速度に対するノイズ
         self.v_mean   = 0.0
-        self.sigma_vx = 0.001 # depth
-        self.sigma_vy = 0.0001 # right and left
-        self.sigma_vz = 0.001 # tall
-        self.time_interval = 0.1
+        self.sigma_vx = 0.01 # depth
+        self.sigma_vy = 0.01 # right and left
+        self.sigma_vz = 0.01 # tall
+        self.time_interval = 0.17
 
     # 誤差楕円
     # p：楕円の中心座標（x, y）
@@ -32,8 +31,8 @@ class KalmanFilter():
     def sigma_ellipse(self, p, cov, n):  
         # 固有値、固有ベクトルを求める
         eig_vals, eig_vec = np.linalg.eig(cov)
-        ang = math.atan2(eig_vec[:,0][1], eig_vec[:,0][0])/math.pi*180
-        return Ellipse(p, width=2*n*math.sqrt(eig_vals[0]), height=2*n*math.sqrt(eig_vals[1]), fill=False, color="green", alpha=0.5)
+        ang = math.atan2(eig_vec[:,0][1], eig_vec[:,0][0])/math.pi*180 # eig_vec[:, 0]は0行目
+        return Ellipse(p, angle = ang, width=2*n*math.sqrt(eig_vals[0]), height=2*n*math.sqrt(eig_vals[1]), fill=False, color="green", alpha=0.5)
     
     """
     @fn matG()
@@ -120,8 +119,8 @@ class KalmanFilter():
             return np.array([ [1.0, 0.0, 0.0, 1*t, 0.0], 
                           [0.0, 1.0, 0.0, 0.0, 1*t], 
                           [0.0, 0.0, 1.0, 0.0, 0.0],
-                          [1, 0.0, 0.0, 1.0, 0.0],
-                          [0.0, 1, 0.0, 0.0, 1.0] ])
+                          [1.0, 0.0, 0.0, 1.0, 0.0],
+                          [0.0, 1.0, 0.0, 0.0, 1.0] ])
         return np.array([ [cos_, sin_, 0.0, t*cos_, t*sin_], 
                           [-sin_, cos_, 0.0, -t*sin_, t*cos_], 
                           [0.0, 0.0, 1.0, 0.0, 0.0],
@@ -166,7 +165,7 @@ class KalmanFilter():
         return np.array([ [1.0, 0.0, 0.0, self.time_interval, 0.0], [0.0, 1.0, 0.0, 0.0, self.time_interval], [0.0, 0.0, 1.0, 0.0, 0.0] ])
 
     def matQ(self):
-        return np.array([ [self.sigma_vx**2, 0.0, 0.0], [0.0, self.sigma_vy**2, 0.0], [0.0, 0.0, self. sigma_vz**2] ])
+        return np.array([ [self.sigma_vx**2, 0.0, 0.0], [0.0, self.sigma_vy**2, 0.0], [0.0, 0.0, self.sigma_vz**2] ])
  
     """
     @fn observation_update()
@@ -181,25 +180,25 @@ class KalmanFilter():
         z_error = z - np.dot(self.matH(), mean_t_1)
         # calc maharanobis distance
         S = Q + np.dot(np.dot(H, cov_t_1), H.T)
-        d2 = np.dot(np.dot(z_error.T, np.linalg.inv(S)), z_error)
-        if(d2 > 5.99): 
-            print("out layer", d2)
+        d2 = np.dot(np.dot(z_error, np.linalg.inv(S)), z_error.reshape(-1, 1))
+        if(d2 > 5.9 and xt_1[0] != 0.000): 
+            print("out layer", d2, "観測値z", z)
             return 
         K = np.dot(np.dot(cov_t_1, H.T), np.linalg.inv(S))
         self.belief.mean += np.dot(K, z_error)  # 平均値更新
         self.belief.cov = (I - K.dot(H)).dot(self.belief.cov) # 共分散更新
     
-    def main_loop(self, xt_1, robot_vw, loop_rate):
+    def main_loop(self, xt_1, zt_1, robot_vw, loop_rate):
         self.time_interval = loop_rate
         # 人の次の位置を計算
         xt = self.human_state_transition(xt_1, robot_vw)
         # 観測値の次の値を計算
-        zt = self.observation_state_transition(xt)
+        zt = self.observation_state_transition(zt_1)
         # 人の動きを推測、平均と分散を求める
         self.motion_update(self.belief.mean, self.belief.cov, robot_vw)
         # 観測方程式：カルマンゲインK
         self.observation_update(self.belief.mean, self.belief.cov, zt)
-        self.belief.mean[2] = xt_1[2]
+        self.belief.mean[2] = zt[2]
         return self.belief
     
     def estimation_nothing_human(self, robot_vw, loop_rate):
