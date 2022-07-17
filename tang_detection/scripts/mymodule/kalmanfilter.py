@@ -172,8 +172,9 @@ class KalmanFilter():
     @note 観測した人の位置と共分散を更新する、zはカメラからの観測値（ロボット座標系）
     @param  
     """
-    def observation_update(self, mean_t_1, cov_t_1, xt_1):
-        z = np.array([ xt_1[0] , xt_1[1] , xt_1[2]])
+    def observation_update(self, zt_1, mean_t_1, cov_t_1):
+        zt = self.observation_state_transition(zt_1)
+        z = np.array([ zt[0] , zt[1] , zt[2]])
         H = self.mat_h()
         Q = self.matQ()
         I = np.eye(5)
@@ -181,7 +182,7 @@ class KalmanFilter():
         # calc maharanobis distance
         S = Q + np.dot(np.dot(H, cov_t_1), H.T)
         d2 = np.dot(np.dot(z_error, np.linalg.inv(S)), z_error.reshape(-1, 1))
-        if(d2 > 5.9 and xt_1[0] != 0.000): 
+        if(d2 > 59 and zt_1[0] != 0.000): 
             print("out layer", d2, "観測値z", z)
             return 
         K = np.dot(np.dot(cov_t_1, H.T), np.linalg.inv(S))
@@ -190,15 +191,11 @@ class KalmanFilter():
     
     def main_loop(self, xt_1, zt_1, robot_vw, loop_rate):
         self.time_interval = loop_rate
-        # 人の次の位置を計算
-        xt = self.human_state_transition(xt_1, robot_vw)
-        # 観測値の次の値を計算
-        zt = self.observation_state_transition(zt_1)
-        # 人の動きを推測、平均と分散を求める
+        # 現在の人の動きを前回推測した人の座標をもとに推測、平均と分散を求める
         self.motion_update(self.belief.mean, self.belief.cov, robot_vw)
-        # 観測方程式：カルマンゲインK
-        self.observation_update(self.belief.mean, self.belief.cov, zt)
-        self.belief.mean[2] = zt[2]
+        # 観測方程式：カルマンゲインK、現在の座標をもとに観測値が妥当かどうか確認後、妥当であれば推測した位置を修正
+        self.observation_update(zt_1, self.belief.mean, self.belief.cov)
+        self.belief.mean[2] = zt_1[2]
         return self.belief
     
     def estimation_nothing_human(self, robot_vw, loop_rate):

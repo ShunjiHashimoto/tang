@@ -275,6 +275,7 @@ class DetectNet():
         cuda_mem = jetson.utils.cudaFromNumpy(frame)
         delta_t = self.calc_delta_time()
         self.estimate_human_position(cuda_mem)
+        self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
         self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
 
         # KalmanFileter
