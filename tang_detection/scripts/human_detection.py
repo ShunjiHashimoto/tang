@@ -31,7 +31,7 @@ from numpy.lib.function_base import copy
 import time
 from scipy.spatial.transform import Rotation
 import math
-# import RPi.GPIO as GPIO
+import Jetson.GPIO as GPIO
 import matplotlib.pyplot as plt
 
 # decimarion_filterのパラメータ
