@@ -87,7 +87,7 @@ class PubMsg():
     """
 
     def __init__(self):
-        self.publisher = rospy.Publisher('tang_cmd', Command, queue_size=1)
+        self.publisher = rospy.Publisher('tang_cmd', HumanInfo, queue_size=1)
         self.human_info = HumanInfo()
 
     def pub(self, cmd):

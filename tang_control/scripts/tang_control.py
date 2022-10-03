@@ -56,7 +56,7 @@ class TangController():
         self.dt = 0.1
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
-        self.human_info_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_callback, queue_size=1)
+        self.human_info_sub = rospy.Subscriber('tang_cmd', HumanInfo, self.cmd_callback, queue_size=1)
         self.imu_sub = rospy.Subscriber('cmdvel_from_imu', Twist, self.imu_callback, queue_size=1)
         # subscribe to joystick messages on topic "joy"
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joy_callback, queue_size=1)
