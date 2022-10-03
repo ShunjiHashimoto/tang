@@ -18,12 +18,21 @@ class KalmanFilter():
     def __init__(self, human_input):
         self.belief   = multivariate_normal(mean=human_input, cov=np.diag([1e-10, 1e-10, 1e-10, 1e-10, 1e-10]))
         self.w_mean   = 0.0
-        self.sigma_w  = 0.026099884 # 人の速度に対するノイズ
+        self.sigma_w  = 0.05 # 人の速度に対するノイズ
         self.v_mean   = 0.0
-        self.sigma_vx = 0.00008953076
-        self.sigma_vy = 0.000000485137963
-        self.sigma_vz = 0.00000001
-        self.time_interval = 0.1
+        self.sigma_vx = 0.01 # depth
+        self.sigma_vy = 0.01 # right and left
+        self.sigma_vz = 0.01 # tall
+        self.time_interval = 0.17
+
+    # 誤差楕円
+    # p：楕円の中心座標（x, y）
+    # cov：共分散
+    def sigma_ellipse(self, p, cov, n):  
+        # 固有値、固有ベクトルを求める
+        eig_vals, eig_vec = np.linalg.eig(cov)
+        ang = math.atan2(eig_vec[:,0][1], eig_vec[:,0][0])/math.pi*180 # eig_vec[:, 0]は0行目
+        return Ellipse(p, angle = ang, width=2*n*math.sqrt(eig_vals[0]), height=2*n*math.sqrt(eig_vals[1]), fill=False, color="green", alpha=0.5)
     
     """
     @fn matG()
@@ -107,16 +116,16 @@ class KalmanFilter():
         sin_ = math.sin(delta_theta)
         t = self.time_interval
         if(robot_omega < 0.01 and robot_omega > -0.01):
-            return np.array([ [2.0, 0.0, 0.0, 2*t, 0.0], 
-                          [0.0, 2.0, 0.0, 0.0, 2*t], 
+            return np.array([ [1.0, 0.0, 0.0, 1*t, 0.0], 
+                          [0.0, 1.0, 0.0, 0.0, 1*t], 
                           [0.0, 0.0, 1.0, 0.0, 0.0],
-                          [1/t, 0.0, 0.0, 1.0, 0.0],
-                          [0.0, 1/t, 0.0, 0.0, 1.0] ])
-        return np.array([ [2*cos_, 2*sin_, 0.0, 2*t*cos_, 2*t*sin_], 
-                          [-2*sin_, 2*cos_, 0.0, -2*t*sin_, 2*t*cos_], 
+                          [1.0, 0.0, 0.0, 1.0, 0.0],
+                          [0.0, 1.0, 0.0, 0.0, 1.0] ])
+        return np.array([ [cos_, sin_, 0.0, t*cos_, t*sin_], 
+                          [-sin_, cos_, 0.0, -t*sin_, t*cos_], 
                           [0.0, 0.0, 1.0, 0.0, 0.0],
-                          [cos_/t, sin_/t, 0.0, cos_, sin_],
-                          [-sin_/t, cos_/t, 0.0, -sin_, cos_] ])
+                          [cos_, sin_, 0.0, cos_, sin_],
+                          [-sin_, cos_, 0.0, -sin_, cos_] ])
     
     def matA(self, xt, v, w):
         delta_theta = w*self.time_interval
@@ -156,34 +165,37 @@ class KalmanFilter():
         return np.array([ [1.0, 0.0, 0.0, self.time_interval, 0.0], [0.0, 1.0, 0.0, 0.0, self.time_interval], [0.0, 0.0, 1.0, 0.0, 0.0] ])
 
     def matQ(self):
-        return np.array([ [self.sigma_vx**2, 0.0, 0.0], [0.0, self.sigma_vy**2, 0.0], [0.0, 0.0, self. sigma_vz**2] ])
+        return np.array([ [self.sigma_vx**2, 0.0, 0.0], [0.0, self.sigma_vy**2, 0.0], [0.0, 0.0, self.sigma_vz**2] ])
  
     """
     @fn observation_update()
     @note 観測した人の位置と共分散を更新する、zはカメラからの観測値（ロボット座標系）
     @param  
     """
-    def observation_update(self, mean_t_1, cov_t_1, xt_1):
-        z = np.array([ xt_1[0] , xt_1[1] , xt_1[2]])
+    def observation_update(self, zt_1, mean_t_1, cov_t_1):
+        zt = self.observation_state_transition(zt_1)
+        z = np.array([ zt[0] , zt[1] , zt[2]])
         H = self.mat_h()
         Q = self.matQ()
         I = np.eye(5)
-        K = np.dot(np.dot(cov_t_1, H.T), np.linalg.inv(Q + np.dot(np.dot(H, cov_t_1), H.T)))
         z_error = z - np.dot(self.matH(), mean_t_1)
+        # calc maharanobis distance
+        S = Q + np.dot(np.dot(H, cov_t_1), H.T)
+        d2 = np.dot(np.dot(z_error, np.linalg.inv(S)), z_error.reshape(-1, 1))
+        if(d2 > 59 and zt_1[0] != 0.000): 
+            print("out layer", d2, "観測値z", z)
+            return 
+        K = np.dot(np.dot(cov_t_1, H.T), np.linalg.inv(S))
         self.belief.mean += np.dot(K, z_error)  # 平均値更新
         self.belief.cov = (I - K.dot(H)).dot(self.belief.cov) # 共分散更新
     
-    def main_loop(self, xt_1, robot_vw, loop_rate):
+    def main_loop(self, xt_1, zt_1, robot_vw, loop_rate):
         self.time_interval = loop_rate
-        # 人の次の位置を計算
-        xt = self.human_state_transition(xt_1, robot_vw)
-        # 観測値の次の値を計算
-        zt = self.observation_state_transition(xt)
-        # 人の動きを推測、平均と分散を求める
+        # 現在の人の動きを前回推測した人の座標をもとに推測、平均と分散を求める
         self.motion_update(self.belief.mean, self.belief.cov, robot_vw)
-        # 観測方程式：カルマンゲインK
-        self.observation_update(self.belief.mean, self.belief.cov, zt)
-        self.belief.mean[2] = xt_1[2]
+        # 観測方程式：カルマンゲインK、現在の座標をもとに観測値が妥当かどうか確認後、妥当であれば推測した位置を修正
+        self.observation_update(zt_1, self.belief.mean, self.belief.cov)
+        self.belief.mean[2] = zt_1[2]
         return self.belief
     
     def estimation_nothing_human(self, robot_vw, loop_rate):
