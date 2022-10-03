@@ -51,7 +51,7 @@ class TangController():
         self.current_param.realsense_thresh = 4.0
         self.main = 0
         self.ref_pos = 0.0
-        self.speed = rospy.get_param("/tang_teleop/speed")
+        self.speed = rospy.get_param("/tang_bringup/speed")
         self.prev_command = 0
         self.command = 0
         self.depth_min = 0.8
