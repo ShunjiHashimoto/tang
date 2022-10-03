@@ -14,8 +14,8 @@ from sensor_msgs.msg import Imu
 from geometry_msgs.msg import Point
 
 # detectnet
-import jetson.inference
-import jetson.utils
+import jetson_inference
+import jetson_utils
 import argparse
 
 # Kalmanfilter
@@ -31,7 +31,7 @@ from numpy.lib.function_base import copy
 import time
 from scipy.spatial.transform import Rotation
 import math
-import RPi.GPIO as GPIO
+# import RPi.GPIO as GPIO
 import matplotlib.pyplot as plt
 
 # decimarion_filterのパラメータ
@@ -69,8 +69,8 @@ Pitch = 6.1850105367549055/2/1000
 cnt_list = [0, 0]
 GPIO.setmode(GPIO.BCM)
 # 割り込みイベント設定
-right_gear_pin = 23
-left_gear_pin = 27
+right_gear_pin = 24
+left_gear_pin = 22
 GPIO.setup(right_gear_pin, GPIO.IN)
 GPIO.setup(left_gear_pin, GPIO.IN)
 # bouncetimeは割り込みを行った後設定された時間は割り込みを検知しないという糸
@@ -107,13 +107,13 @@ class DetectNet():
 
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
-        # create video output object
-        self.output = jetson.utils.videoOutput("display://0")
-        # load the object detection network
-        self.net = jetson.inference.detectNet(
-            "ssd-mobilenet-v2", threshold=0.5)
         # create video sources
-        self.input = jetson.utils.videoSource("/dev/video2")
+        self.input = jetson_utils.videoSource("/dev/video2")
+        # create video output object
+        self.output = jetson_utils.videoOutput("display://0")
+        # load the object detection network
+        self.net = jetson_inference.detectNet(
+            "ssd-mobilenet-v2", threshold=0.5)
         # publisher
         self.pubmsg = PubMsg()
         # subscriber
@@ -125,7 +125,7 @@ class DetectNet():
         self.param = Modechange()
         self.human_point_pixel = Point()
         self.human_point_pixel.z = 1.0
-        self.param.realsense_thresh = 3.0
+        self.param.realsense_thresh = 1.0
         self.param.current_mode = 1
         self.debug = rospy.get_param("/tang_detection/debug")
         # KalmanFileter Parameter
@@ -192,7 +192,7 @@ class DetectNet():
     def render_image(self, img, cx, cy, color, depth_size):
         # render the image
         size = abs(1/depth_size)*40
-        jetson.utils.cudaDrawCircle(img, (cx, cy), size, color)  # (cx,cy), radius, color
+        jetson_utils.cudaDrawCircle(img, (cx, cy), size, color)  # (cx,cy), radius, color
         self.output.Render(img)
 
     def output_image(self):
@@ -249,19 +249,26 @@ class DetectNet():
         """
         # realsense setting
         align = rs.align(rs.stream.color)
+        pipeline = rs.pipeline()
         config = rs.config()
+        # Get device product line for setting a supporting resolution
+        pipeline_wrapper = rs.pipeline_wrapper(pipeline)
+        pipeline_profile = config.resolve(pipeline_wrapper)
+        device = pipeline_profile.get_device()
+        device_product_line = str(device.get_info(rs.camera_info.product_line))
+
         config.enable_stream(rs.stream.color, WIDTH,
                              HEIGHT, rs.format.bgr8, FPS)
         config.enable_stream(rs.stream.depth, WIDTH,
                              HEIGHT, rs.format.z16, FPS)
-        pipeline = rs.pipeline()
+        
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
         # 内部パラメータ取得
         color_intr = rs.video_stream_profile(
             profile.get_stream(rs.stream.color)).get_intrinsics()
 
-        r = rospy.Rate(10)  # 10hz
+        # r = rospy.Rate(10)  # 10hz
 
         # realsensenの認識距離設定
         self.command.depth_thresh = self.param.realsense_thresh
@@ -272,7 +279,7 @@ class DetectNet():
         frames = pipeline.wait_for_frames()
         frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
         # copy to CUDA memory
-        cuda_mem = jetson.utils.cudaFromNumpy(frame)
+        cuda_mem = jetson_utils.cudaFromNumpy(frame)
         delta_t = self.calc_delta_time()
         self.estimate_human_position(cuda_mem)
         self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
@@ -291,8 +298,9 @@ class DetectNet():
                 if not frame.any():
                     print("frame nothing")
                     # continue
-                cuda_mem = jetson.utils.cudaFromNumpy(frame)
+                cuda_mem = jetson_utils.cudaFromNumpy(frame)
                 delta_t = self.calc_delta_time()
+                print("処理時間", delta_t)
 
                 if(self.param.current_mode == 0):
                     # rospy.loginfo("teleop mode")
@@ -314,7 +322,7 @@ class DetectNet():
                         self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
                         human_pos_beleif = kalman.main_loop(self.prev_human_input, self.human_input, robot_vw, delta_t)
                         self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
-                        print("分散：　", human_pos_beleif.cov)
+                        # print("分散：　", human_pos_beleif.cov)
                     else:
                         human_pos_beleif = kalman.estimation_nothing_human(robot_vw, delta_t)
                         self.command.human_point.x = human_pos_beleif.mean[0]

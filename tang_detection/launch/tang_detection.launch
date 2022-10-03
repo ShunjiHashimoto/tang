@@ -1,9 +1,10 @@
 <launch>
-
- <!-- <node name="joy_node" pkg="joy" type="joy_node" >
-    <param name="autorepeat_rate" value="5" />
-    <param name="deadzone" value="0.12" />
-  </node> -->
+  <arg name="port"                  default = "/dev/ttyUSB0" />
+  
+  <node pkg="nodelet" type="nodelet" output="screen" name="wit_nodelet_manager" args="manager"/>
+  <node pkg="nodelet" type="nodelet" output="screen" name="wit" args="load wit_node/WitNodelet wit_nodelet_manager" >
+    <param name="port" value="$(arg port)" />
+  </node>
 
   <node name="tang_detection" pkg="tang_detection" type="human_detection.py" output="screen">
     <param name = "threshold" type = "double" value = "3.0"/>  <!-- これより遠い距離の画素を無視する -->
