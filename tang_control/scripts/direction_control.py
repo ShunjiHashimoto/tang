@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 import rospy
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Imu

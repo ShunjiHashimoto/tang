@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-## just teleop tang ##
-
 import rospy
 import time
 from geometry_msgs.msg import Twist

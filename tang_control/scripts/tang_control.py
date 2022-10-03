@@ -7,7 +7,6 @@ from sensor_msgs.msg import Joy
 from tang_msgs.msg import HumanInfo, Modechange
 from geometry_msgs.msg import Twist
 
-
 # modeを選択
 GPIO.setmode(GPIO.BCM)
 
