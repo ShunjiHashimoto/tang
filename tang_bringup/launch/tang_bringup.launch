@@ -1,12 +1,14 @@
 <launch>
+
   <node name="joy_node" pkg="joy" type="joy_node" >
     <param name="autorepeat_rate" value="5" />
     <param name="deadzone" value="0.12" />
   </node>
 
-  <node name="tang_bringup" pkg="tang_bringup" type="tang_bringup.py" output="screen">
+  <node name="tang_control" pkg="tang_control" type="tang_control.py" output="screen">
     <param name = "max_area" type = "int" value = "130000"/> 
     <param name = "max_area_red" type = "int" value = "167"/> 
     <param name = "speed" type = "int" value = "30"/>
   </node>
+  
 </launch>

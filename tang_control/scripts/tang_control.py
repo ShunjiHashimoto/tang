@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import rospy
-# import sys
 import time
 import RPi.GPIO as GPIO
 from sensor_msgs.msg import Joy
-from tang_msgs.msg import Command
-from tang_msgs.msg import Modechange
+from tang_msgs.msg import HumanInfo, Modechange
 from geometry_msgs.msg import Twist
 
 
@@ -43,22 +41,23 @@ AXS_OFF = 0.0
 
 class TangController():
     def __init__(self):
-        self.cmd = Command()
+        # HumanInfo.msg
+        self.human_info = HumanInfo()
         self.cmdvel_from_imu = Twist()
-        self.cmd.depth_thresh = 3.0
+        # Modechange.msg
+        self.current_mode = Modechange()
+        self.current_mode.realsense_depth_thresh = 4.0
         self.btn = self.joy_l = self.joy_r = 0
-        self.current_param = Modechange()
-        self.current_param.realsense_thresh = 4.0
         self.main = 0
         self.ref_pos = 0.0
-        self.speed = rospy.get_param("/tang_bringup/speed")
+        self.speed = rospy.get_param("/tang_control/speed")
         self.prev_command = 0
-        self.command = 0
-        self.depth_min = 0.8
+        self.command_pwm = 0
+        self.depth_min_thresh = 0.8
         self.dt = 0.1
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
-        self.cmd_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_callback, queue_size=1)
+        self.human_info_sub = rospy.Subscriber('tang_cmd', Command, self.cmd_callback, queue_size=1)
         self.imu_sub = rospy.Subscriber('cmdvel_from_imu', Twist, self.imu_callback, queue_size=1)
         # subscribe to joystick messages on topic "joy"
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joy_callback, queue_size=1)
@@ -87,32 +86,32 @@ class TangController():
         
         elif self.main == 1:
             # 速度を距離に従って減衰させる、1m20cm以内で減衰開始する
-            if(self.cmd.human_point.x >= 1.2 or self.cmd.human_point.x < 0.0):
+            if(self.human_info.human_point.x >= 1.2 or self.human_info.human_point.x < 0.0):
                 command_depth = 1.0
             else:
-                command_depth = self.cmd.human_point.x / 1.2
+                command_depth = self.human_info.human_point.x / 1.2
             motor_r = motor_l = self.speed * command_depth
             
             # コマンドの制御量を比例制御で決める
-            self.command = self.p_control(self.cmd.human_point.y)
+            self.command_pwm = self.p_control(self.human_info.human_point.y)
 
-            if (abs(self.command) > motor_r and self.command < 0.0):
-                self.command = -self.speed * command_depth
-            elif (abs(self.command) > motor_r and self.command > 0.0):
-                self.command = self.speed * command_depth
+            if (abs(self.command_pwm) > motor_r and self.command_pwm < 0.0):
+                self.command_pwm = -self.speed * command_depth
+            elif (abs(self.command_pwm) > motor_r and self.command_pwm > 0.0):
+                self.command_pwm = self.speed * command_depth
             # 80cm以内であれば止まる
-            if self.cmd.human_point.x <= self.depth_min and self.cmd.human_point.x > 0.0:
-                rospy.logwarn("Stop: %lf", self.cmd.human_point.x)
+            if self.human_info.human_point.x <= self.depth_min_thresh and self.human_info.human_point.x > 0.0:
+                rospy.logwarn("Stop: %lf", self.human_info.human_point.x)
                 motor_r = motor_l = 0
-            elif (self.command < 0): # 右回り
-                motor_r -= self.command/10
+            elif (self.command_pwm < 0): # 右回り
+                motor_r -= self.command_pwm/10
                 motor_r = motor_r*1.1
-                motor_l += self.command 
+                motor_l += self.command_pwm 
                 rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
-            elif (self.command >= 0): # 左回り
-                motor_l += self.command/10
+            elif (self.command_pwm >= 0): # 左回り
+                motor_l += self.command_pwm/10
                 motor_l = motor_l*1.1
-                motor_r -= self.command
+                motor_r -= self.command_pwm
                 rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
             GPIO.output(gpio_pin_r, GPIO.HIGH)
             GPIO.output(gpio_pin_l, GPIO.HIGH)
@@ -120,7 +119,7 @@ class TangController():
                 p_r.ChangeDutyCycle(motor_r)
                 p_l.ChangeDutyCycle(motor_l)
             except:
-                rospy.logwarn("DutyCycle is over 100, %lf", self.command)
+                rospy.logwarn("DutyCycle is over 100, %lf", self.command_pwm)
             return
 
         elif self.main == 6:
@@ -171,7 +170,7 @@ class TangController():
     
     def cmd_callback(self, msg):
         # 人の位置とサイズを得る
-        self.cmd = msg
+        self.human_info = msg
     
     def imu_callback(self, msg):
         self.cmdvel_from_imu = msg
@@ -181,12 +180,12 @@ class TangController():
         newbtn = 0
         max_thresh = 7.0
         min_thresh = 1.0
-        self.current_param.realsense_thresh += float(joy_msg.buttons[5])/5
-        self.current_param.realsense_thresh -= float(joy_msg.buttons[4])/5
-        if(max_thresh < self.current_param.realsense_thresh):
-            self.current_param.realsense_thresh -= 0.2
-        elif(min_thresh > self.current_param.realsense_thresh):
-            self.current_param.realsense_thresh += 0.2
+        self.current_mode.realsense_depth_thresh += float(joy_msg.buttons[5])/5
+        self.current_mode.realsense_depth_thresh -= float(joy_msg.buttons[4])/5
+        if(max_thresh < self.current_mode.realsense_depth_thresh):
+            self.current_mode.realsense_depth_thresh -= 0.2
+        elif(min_thresh > self.current_mode.realsense_depth_thresh):
+            self.current_mode.realsense_depth_thresh += 0.2
 
         if(joy_msg.buttons[6]):
             newbtn |= BTN_BACK
@@ -228,12 +227,11 @@ class TangController():
         elif(self.speed < 10):
             self.speed = 10
 
-        self.current_param.current_mode = self.main
-        self.mode_pub.publish(self.current_param)	
+        self.current_mode.mode = self.main
+        self.mode_pub.publish(self.current_mode)	
         
 def main():
-    # start node
-    rospy.init_node("tang_bringup", anonymous=True)
+    rospy.init_node("tang_control", anonymous=True)
     instance = TangController()
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():

@@ -8,7 +8,7 @@
 # ros
 import rospy
 import roslib.packages
-from tang_msgs.msg import Command, Modechange
+from tang_msgs.msg import HumanInfo, Modechange
 from sensor_msgs.msg import Joy
 from sensor_msgs.msg import Imu
 from geometry_msgs.msg import Point
@@ -88,15 +88,15 @@ class PubMsg():
 
     def __init__(self):
         self.publisher = rospy.Publisher('tang_cmd', Command, queue_size=1)
-        self.command = Command()
+        self.human_info = HumanInfo()
 
     def pub(self, cmd):
         """
         @fn pub()
         @details 検出した人の位置と大きさをpub
         """
-        self.command = cmd
-        self.publisher.publish(self.command)
+        self.human_info = cmd
+        self.publisher.publish(self.human_info)
 
 
 class DetectNet():
@@ -117,16 +117,15 @@ class DetectNet():
         # publisher
         self.pubmsg = PubMsg()
         # subscriber
-        rospy.Subscriber(
-            "current_param", Modechange, self.mode_callback, queue_size=1)
+        rospy.Subscriber("current_param", Modechange, self.mode_callback, queue_size=1)
         rospy.Subscriber("imu", Imu, self._imu_callback)
         # command type
-        self.command = Command()
-        self.param = Modechange()
+        self.human_info = HumanInfo()
+        self.current_mode = Modechange()
         self.human_point_pixel = Point()
         self.human_point_pixel.z = 1.0
-        self.param.realsense_thresh = 1.0
-        self.param.current_mode = 1
+        self.current_mode.realsense_depth_thresh = 1.0
+        self.current_mode.mode = 1
         self.debug = rospy.get_param("/tang_detection/debug")
         # KalmanFileter Parameter
         self.prev_time = 0.0
@@ -187,7 +186,7 @@ class DetectNet():
         return [-pos_3d[1], -pos_3d[2], pos_3d[0]]
 
     def mode_callback(self, msg):
-        self.param = msg
+        self.current_mode = msg
 
     def render_image(self, img, cx, cy, color, depth_size):
         # render the image
@@ -207,29 +206,29 @@ class DetectNet():
         @details darknetを用いて人検出
         """
         max_area = 0
-        self.command.is_human = 0
+        self.human_info.is_human = 0
         detections = self.net.Detect(img)
         if (not detections):
-            self.command.max_area = 0
+            self.human_info.max_area = 0
             return
         for detection in detections:
             if (detection.ClassID != 1):
-                self.command.max_area = 0
+                self.human_info.max_area = 0
                 continue
             if (max_area < detection.Area and detection.ClassID == 1):
                 max_area = int(detection.Area)
                 human_pos = detection.Center
-                self.command.is_human = 1
+                self.human_info.is_human = 1
 
         # exit on input/output EOS
         # TODO: human_posを[m]でpubする
-        if not self.input.IsStreaming() and self.command.is_human == 1:
+        if not self.input.IsStreaming() and self.human_info.is_human == 1:
             self.human_point_pixel.x = human_pos[0]  # [pixel]
             self.human_point_pixel.y = human_pos[1]  # [pixel]
-            self.command.max_area = max_area
+            self.human_info.max_area = max_area
         else:
-            self.command.max_area = 0
-            self.command.is_human = 0
+            self.human_info.max_area = 0
+            self.human_info.is_human = 0
         return
 
     def calc_human_input(self, color_intr, pose, delta_t):
@@ -268,11 +267,10 @@ class DetectNet():
         color_intr = rs.video_stream_profile(
             profile.get_stream(rs.stream.color)).get_intrinsics()
 
-        # r = rospy.Rate(10)  # 10hz
+        r = rospy.Rate(10)  # 10hz
 
         # realsensenの認識距離設定
-        self.command.depth_thresh = self.param.realsense_thresh
-        max_dist = self.command.depth_thresh/depth_scale
+        max_dist = self.current_mode.realsense_depth_thresh/depth_scale
 
         ## first calculate
         # フレーム取得
@@ -283,7 +281,7 @@ class DetectNet():
         delta_t = self.calc_delta_time()
         self.estimate_human_position(cuda_mem)
         self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
-        self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
+        self.human_info.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
 
         # KalmanFileter
         robot_vw = np.array([0.000001, 0.000001])
@@ -302,11 +300,11 @@ class DetectNet():
                 delta_t = self.calc_delta_time()
                 print("処理時間", delta_t)
 
-                if(self.param.current_mode == 0):
+                if(self.current_mode.mode == 0):
                     # rospy.loginfo("teleop mode")
                     r.sleep()
 
-                elif (self.param.current_mode == 1):
+                elif (self.current_mode.mode == 1):
                     self.estimate_human_position(cuda_mem)
                     vel_r = calc_velocity(cnt_list[0], delta_t)
                     vel_l = calc_velocity(cnt_list[1], delta_t)
@@ -318,20 +316,20 @@ class DetectNet():
                         robot_vw[1] = 0.000001
 
                     # 人の位置をPub、もし人が見えていれば観測値をPub、見えなければ推測値をPubする    
-                    if (self.command.is_human == 1):
-                        self.command.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
+                    if (self.human_info.is_human == 1):
+                        self.human_info.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
                         human_pos_beleif = kalman.main_loop(self.prev_human_input, self.human_input, robot_vw, delta_t)
                         self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
                         # print("分散：　", human_pos_beleif.cov)
                     else:
                         human_pos_beleif = kalman.estimation_nothing_human(robot_vw, delta_t)
-                        self.command.human_point.x = human_pos_beleif.mean[0]
-                        self.command.human_point.y = human_pos_beleif.mean[1]
-                        self.command.human_point.z = human_pos_beleif.mean[2] 
+                        self.human_info.human_point.x = human_pos_beleif.mean[0]
+                        self.human_info.human_point.y = human_pos_beleif.mean[1]
+                        self.human_info.human_point.z = human_pos_beleif.mean[2] 
                     
                     self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
                                                       human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
-                    self.pubmsg.pub(self.command)
+                    self.pubmsg.pub(self.human_info)
                     
                     # Debugパラメータ
                     if (self.debug):
