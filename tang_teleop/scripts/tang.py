@@ -20,8 +20,8 @@ gpio_pin_l = 17
 GPIO.setup(gpio_pin_r, GPIO.OUT)
 GPIO.setup(gpio_pin_l, GPIO.OUT)
 
-output_pin_r = 12
-output_pin_l = 13
+output_pin_r = 13
+output_pin_l = 12
 # アナログ出力ピンを設定、output_pinを32,33に設定
 # ANA1 = 32(LEFT), ANA2 = 33(RIGHT)
 GPIO.setup(output_pin_r, GPIO.OUT)
@@ -69,7 +69,7 @@ class TangController():
         if self.main == 0:
             motor_l = self.joy_l
             motor_r = self.joy_r
-            print(motor_r, motor_l)
+            # print(motor_r, motor_l)
             time.sleep(0.1)
             if motor_l >= 0 and motor_r >= 0:
                 GPIO.output(gpio_pin_r, GPIO.HIGH)
@@ -81,43 +81,46 @@ class TangController():
                 GPIO.output(gpio_pin_r, GPIO.LOW)
                 GPIO.output(gpio_pin_l, GPIO.LOW)
                 p_r.ChangeDutyCycle(-(motor_r))
-                p_l.ChangeDutyCycle(-(motor_l))
+                p_l.ChangeDutyCycle(-(motor_l*1.1))
                 # rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
             return
         
         elif self.main == 1:
-            # 速度を距離に従って減衰させる、3m以内で減衰開始する
-            if(self.cmd.human_point.x >= 0.7):
+            # 速度を距離に従って減衰させる、1m20cm以内で減衰開始する
+            if(self.cmd.human_point.x >= 1.2 or self.cmd.human_point.x < 0.0):
                 command_depth = 1.0
             else:
-                command_depth = self.cmd.human_point.x / 0.7
+                command_depth = self.cmd.human_point.x / 1.2
             motor_r = motor_l = self.speed * command_depth
             
             # コマンドの制御量を比例制御で決める
             self.command = self.p_control(self.cmd.human_point.y)
-            if (abs(self.command) > motor_r):
-                self.command = 20
-            print(self.cmd.human_point.x)
+
+            if (abs(self.command) > motor_r and self.command < 0.0):
+                self.command = -self.speed * command_depth
+            elif (abs(self.command) > motor_r and self.command > 0.0):
+                self.command = self.speed * command_depth
             # 80cm以内であれば止まる
-            # if self.cmd.human_point.x <= self.depth_min or self.cmd.is_human == 0:
             if self.cmd.human_point.x <= self.depth_min and self.cmd.human_point.x > 0.0:
                 rospy.logwarn("Stop: %lf", self.cmd.human_point.x)
                 motor_r = motor_l = 0
-            elif (self.command < 0):
-                motor_r += self.command
-                rospy.loginfo(
-                    "motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
-            elif (self.command >= 0):
-                motor_l -= self.command
-                rospy.loginfo(
-                    "motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
+            elif (self.command < 0): # 右回り
+                motor_r -= self.command/10
+                motor_r = motor_r*1.1
+                motor_l += self.command 
+                rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
+            elif (self.command >= 0): # 左回り
+                motor_l += self.command/10
+                motor_l = motor_l*1.1
+                motor_r -= self.command
+                rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
             GPIO.output(gpio_pin_r, GPIO.HIGH)
             GPIO.output(gpio_pin_l, GPIO.HIGH)
             try:
                 p_r.ChangeDutyCycle(motor_r)
                 p_l.ChangeDutyCycle(motor_l)
             except:
-                rospy.logwarn("DutyCycle is over 100")
+                rospy.logwarn("DutyCycle is over 100, %lf", self.command)
             return
 
         elif self.main == 6:
@@ -159,12 +162,12 @@ class TangController():
         @details P制御
         """
         # p_gain = 0.04
-        p_gain = 50.0
-        d_gain = 1.0
+        p_gain = 4.3
+        d_gain = 7.0
         current_command = p_gain * (self.ref_pos - cur_pos) + d_gain*((self.ref_pos - cur_pos) - self.prev_command)/self.dt
         self.prev_command = self.ref_pos - cur_pos
-        print("diff between cur and ref", self.ref_pos - cur_pos)
-        return -current_command
+        print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
+        return current_command
     
     def cmd_callback(self, msg):
         # 人の位置とサイズを得る
@@ -200,7 +203,7 @@ class TangController():
         else:
             joy_l = 0
             
-        joy_r = joy_msg.axes[3]
+        joy_r = joy_msg.axes[4]
         if(joy_r <= -AXS_OFF):
             joy_r += AXS_OFF
         elif(joy_r >= AXS_OFF):
