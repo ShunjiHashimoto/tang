@@ -7,6 +7,9 @@ from sensor_msgs.msg import Joy
 from tang_msgs.msg import HumanInfo, Modechange
 from geometry_msgs.msg import Twist
 
+p_gain = 15.0 
+d_gain = 7.0
+
 # modeを選択
 GPIO.setmode(GPIO.BCM)
 
@@ -160,8 +163,9 @@ class TangController():
         @details P制御
         """
         # p_gain = 0.04
-        p_gain = 4.3
-        d_gain = 7.0
+        # p_gain = 4.3
+        #p_gain = 10
+        #d_gain = 7.0
         current_command = p_gain * (self.ref_pos - cur_pos) + d_gain*((self.ref_pos - cur_pos) - self.prev_command)/self.dt
         self.prev_command = self.ref_pos - cur_pos
         print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
