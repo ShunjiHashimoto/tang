@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import rospy
 import time
@@ -6,6 +6,7 @@ import RPi.GPIO as GPIO
 from sensor_msgs.msg import Joy
 from tang_msgs.msg import HumanInfo, Modechange
 from geometry_msgs.msg import Twist
+import spidev
 
 p_gain = 15.0 
 d_gain = 7.0
@@ -15,6 +16,8 @@ GPIO.setmode(GPIO.BCM)
 
 gpio_pin_r = 18
 gpio_pin_l = 17
+teleop_mode_gpio = 5
+follow_mode_gpio = 6
 # デジタル出力ピンを設定, 回転方向を決められる
 # DIG1 = 11(LEFT), DIG2 = 12(RIGHT)
 GPIO.setup(gpio_pin_r, GPIO.OUT)
@@ -35,11 +38,27 @@ p_l = GPIO.PWM(output_pin_l, 50)
 p_r.start(0)
 p_l.start(0)
 
+# teleop
+def callback_switch_on(gpio): 
+    print(gpio)
+
 BTN_BACK = 0x0100
 BTN_Y = 0x0001
 BTN_A = 0x0002
 AXS_MAX = 1.0
 AXS_OFF = 0.0
+GPIO.setup(teleop_mode_gpio, GPIO.IN)
+GPIO.setup(follow_mode_gpio, GPIO.IN)
+GPIO.add_event_detect(teleop_mode_gpio, GPIO.FALLING, callback=callback_switch_on, bouncetime=1000)
+GPIO.add_event_detect(follow_mode_gpio, GPIO.FALLING, callback=callback_switch_on, bouncetime=1000)
+
+# spi settings
+spi = spidev.SpiDev()
+spi.open(0,0)
+spi.max_speed_hz = 1000000  
+swt_channel = 2
+vrx_channel = 0
+vry_channel = 1
 
 class TangController():
     def __init__(self):
@@ -65,24 +84,37 @@ class TangController():
         self.joy_sub = rospy.Subscriber("joy", Joy, self.joy_callback, queue_size=1)
         # publisher, モードと距離の閾値、赤色検出の閾値をpub
         self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
+    
+    def read_channel(self, channel):
+        adc = spi.xfer2([1,(8+channel)<<4,0])
+        data = ((adc[1]&3) << 8) + adc[2]
+        #adc = spi.xfer2([0x68, 0x00])
+        #data = ((adc[0] << 8) + adc[1]) & 0x3FF 
+        return data
 
     def mode_change(self):
         if self.main == 0:
-            motor_l = self.joy_l
-            motor_r = self.joy_r
+            # Read the joystick position data
+            vrx_pos = self.read_channel(vrx_channel)
+            vry_pos = self.read_channel(vry_channel)
+            # Read switch state
+            swt_val = self.read_channel(swt_channel)
+            print("X : {}  Y : {}  Switch : {}".format(vrx_pos,vry_pos,swt_val))
+            # motor_l = self.joy_l
+            # motor_r = self.joy_r
             # print(motor_r, motor_l)
             time.sleep(0.1)
-            if motor_l >= 0 and motor_r >= 0:
-                GPIO.output(gpio_pin_r, GPIO.HIGH)
-                GPIO.output(gpio_pin_l, GPIO.HIGH)
-                p_r.ChangeDutyCycle(motor_r)
-                p_l.ChangeDutyCycle(motor_l)
+            # if motor_l >= 0 and motor_r >= 0:
+            #     GPIO.output(gpio_pin_r, GPIO.HIGH)
+            #     GPIO.output(gpio_pin_l, GPIO.HIGH)
+            #     p_r.ChangeDutyCycle(motor_r)
+            #     p_l.ChangeDutyCycle(motor_l)
                 # rospy.loginfo("Go! | motor_l : %d | motor_r: %d", motor_l, motor_r)
-            elif motor_l < 0 and motor_r < 0:
-                GPIO.output(gpio_pin_r, GPIO.LOW)
-                GPIO.output(gpio_pin_l, GPIO.LOW)
-                p_r.ChangeDutyCycle(-(motor_r))
-                p_l.ChangeDutyCycle(-(motor_l*1.1))
+            # elif motor_l < 0 and motor_r < 0:
+            #     GPIO.output(gpio_pin_r, GPIO.LOW)
+            #     GPIO.output(gpio_pin_l, GPIO.LOW)
+            #     p_r.ChangeDutyCycle(-(motor_r))
+            #     p_l.ChangeDutyCycle(-(motor_l*1.1))
                 # rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
             return
         
@@ -123,27 +155,6 @@ class TangController():
             except:
                 rospy.logwarn("DutyCycle is over 100, %lf", self.command_pwm)
             return
-
-        elif self.main == 6:
-            motor_r = motor_l = 0
-            if (self.cmdvel_from_imu.angular.z <= 0.1 and self.cmdvel_from_imu.angular.z >= -0.1):
-                rospy.logwarn("Stop")
-                motor_r = motor_l = 0
-
-            elif (self.cmdvel_from_imu.angular.z > 0):
-                GPIO.output(gpio_pin_r, GPIO.LOW)
-                motor_r += self.cmdvel_from_imu.angular.z
-                GPIO.output(gpio_pin_l, GPIO.HIGH)
-                motor_l += self.cmdvel_from_imu.angular.z
-
-            elif (self.cmdvel_from_imu.angular.z < 0):
-                GPIO.output(gpio_pin_l, GPIO.LOW)
-                motor_l += -self.cmdvel_from_imu.angular.z
-                GPIO.output(gpio_pin_r, GPIO.HIGH)
-                motor_r += -self.cmdvel_from_imu.angular.z
-
-            else:
-                rospy.logwarn("Something wrong")
 
             if(motor_r >= 100): motor_r = 100
             if(motor_r <= -100): motor_r = -100
