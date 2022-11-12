@@ -38,10 +38,6 @@ p_l = GPIO.PWM(output_pin_l, 50)
 p_r.start(0)
 p_l.start(0)
 
-# teleop
-def callback_switch_on(gpio): 
-    print(gpio)
-
 BTN_BACK = 0x0100
 BTN_Y = 0x0001
 BTN_A = 0x0002
@@ -49,8 +45,6 @@ AXS_MAX = 1.0
 AXS_OFF = 0.0
 GPIO.setup(teleop_mode_gpio, GPIO.IN)
 GPIO.setup(follow_mode_gpio, GPIO.IN)
-GPIO.add_event_detect(teleop_mode_gpio, GPIO.FALLING, callback=callback_switch_on, bouncetime=1000)
-GPIO.add_event_detect(follow_mode_gpio, GPIO.FALLING, callback=callback_switch_on, bouncetime=1000)
 
 # spi settings
 spi = spidev.SpiDev()
@@ -76,46 +70,74 @@ class TangController():
         self.command_pwm = 0
         self.depth_min_thresh = 0.8
         self.dt = 0.1
+        self.prev_joystick_switch = 1023
+
+        GPIO.add_event_detect(teleop_mode_gpio, GPIO.FALLING, callback=self.callback_switch_on, bouncetime=1000)
+        GPIO.add_event_detect(follow_mode_gpio, GPIO.FALLING, callback=self.callback_switch_on, bouncetime=1000)
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
         self.human_info_sub = rospy.Subscriber('tang_cmd', HumanInfo, self.cmd_callback, queue_size=1)
         self.imu_sub = rospy.Subscriber('cmdvel_from_imu', Twist, self.imu_callback, queue_size=1)
-        # subscribe to joystick messages on topic "joy"
-        self.joy_sub = rospy.Subscriber("joy", Joy, self.joy_callback, queue_size=1)
         # publisher, モードと距離の閾値、赤色検出の閾値をpub
         self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
     
     def read_channel(self, channel):
         adc = spi.xfer2([1,(8+channel)<<4,0])
         data = ((adc[1]&3) << 8) + adc[2]
-        #adc = spi.xfer2([0x68, 0x00])
-        #data = ((adc[0] << 8) + adc[1]) & 0x3FF 
         return data
+    
+    # select mode
+    def callback_switch_on(self, gpio): 
+        self.main = 0 if gpio == teleop_mode_gpio else 1
+        self.current_mode.mode = self.main      
+        self.mode_pub.publish(self.current_mode)	
+        return
+
+    def change_move_speed(self, cnt):
+        if(self.speed == 70):
+            self.speed = 30
+            cnt = 0
+            return cnt
+        swt_val = self.read_channel(swt_channel)
+        # print("switch : {} ".format(swt_val))
+        if(swt_val == 0):
+            cnt += 1
+            if(cnt > 30):
+                self.speed += 10
+                print("speed up: ", self.speed)
+                cnt = 0
+        else:
+            cnt = 0
+        return cnt
 
     def mode_change(self):
         if self.main == 0:
             # Read the joystick position data
-            vrx_pos = self.read_channel(vrx_channel)
-            vry_pos = self.read_channel(vry_channel)
+            vrx_pos = (self.read_channel(vrx_channel) -515)/15
+            vry_pos = (self.read_channel(vry_channel ) -515)/15
             # Read switch state
-            swt_val = self.read_channel(swt_channel)
-            print("X : {}  Y : {}  Switch : {}".format(vrx_pos,vry_pos,swt_val))
+            # print("X : {}  Y : {} ".format(vrx_pos,vry_pos))
             # motor_l = self.joy_l
             # motor_r = self.joy_r
             # print(motor_r, motor_l)
-            time.sleep(0.1)
-            # if motor_l >= 0 and motor_r >= 0:
-            #     GPIO.output(gpio_pin_r, GPIO.HIGH)
-            #     GPIO.output(gpio_pin_l, GPIO.HIGH)
-            #     p_r.ChangeDutyCycle(motor_r)
-            #     p_l.ChangeDutyCycle(motor_l)
-                # rospy.loginfo("Go! | motor_l : %d | motor_r: %d", motor_l, motor_r)
-            # elif motor_l < 0 and motor_r < 0:
-            #     GPIO.output(gpio_pin_r, GPIO.LOW)
-            #     GPIO.output(gpio_pin_l, GPIO.LOW)
-            #     p_r.ChangeDutyCycle(-(motor_r))
-            #     p_l.ChangeDutyCycle(-(motor_l*1.1))
-                # rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
+            # time.sleep(0.1)
+            motor_r = motor_l = vry_pos
+            if(vrx_pos >= 0):
+                motor_r += vrx_pos 
+            else:    
+                motor_l += (-vrx_pos)
+            if motor_l >= 0 and motor_r >= 0:
+                GPIO.output(gpio_pin_r, GPIO.HIGH)
+                GPIO.output(gpio_pin_l, GPIO.HIGH)
+                p_r.ChangeDutyCycle(motor_r)
+                p_l.ChangeDutyCycle(motor_l)
+                rospy.loginfo("Go! | motor_l : %d | motor_r: %d", motor_l, motor_r)
+            elif motor_l < 0 and motor_r < 0:
+                GPIO.output(gpio_pin_r, GPIO.LOW)
+                GPIO.output(gpio_pin_l, GPIO.LOW)
+                p_r.ChangeDutyCycle(-(motor_r))
+                p_l.ChangeDutyCycle(-(motor_l*1.1))
+                rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
             return
         
         elif self.main == 1:
@@ -189,66 +211,13 @@ class TangController():
     def imu_callback(self, msg):
         self.cmdvel_from_imu = msg
         
-    def joy_callback(self, joy_msg):
-        # button[5]で上がる、button[4]で下がる、realsenseの認識距離変更
-        newbtn = 0
-        max_thresh = 7.0
-        min_thresh = 1.0
-        self.current_mode.realsense_depth_thresh += float(joy_msg.buttons[5])/5
-        self.current_mode.realsense_depth_thresh -= float(joy_msg.buttons[4])/5
-        if(max_thresh < self.current_mode.realsense_depth_thresh):
-            self.current_mode.realsense_depth_thresh -= 0.2
-        elif(min_thresh > self.current_mode.realsense_depth_thresh):
-            self.current_mode.realsense_depth_thresh += 0.2
-
-        if(joy_msg.buttons[6]):
-            newbtn |= BTN_BACK
-        elif(joy_msg.buttons[0]):
-            newbtn |= BTN_A
-        elif(joy_msg.buttons[3]):
-            newbtn |= BTN_Y
-        
-        joy_l = joy_msg.axes[1]
-        if(joy_l <= -AXS_OFF):
-            joy_l += AXS_OFF
-        elif(joy_l >= AXS_OFF):
-            joy_l -= AXS_OFF
-        else:
-            joy_l = 0
-            
-        joy_r = joy_msg.axes[4]
-        if(joy_r <= -AXS_OFF):
-            joy_r += AXS_OFF
-        elif(joy_r >= AXS_OFF):
-            joy_r -= AXS_OFF
-        else:
-            joy_r = 0
-        
-        self.joy_l = int(self.speed * joy_l / (AXS_MAX - AXS_OFF))
-        self.joy_r = int(self.speed * joy_r / (AXS_MAX - AXS_OFF))
-            
-        push = ((~self.btn) & newbtn)
-        self.btn = newbtn
-        if(push & BTN_BACK):
-            self.main = (self.main + 1)%2
-        elif(push & BTN_Y):
-            self.speed += 10
-        elif(push & BTN_A):
-            self.speed -= 10
-            
-        if(self.speed > 100):
-            self.speed = 100
-        elif(self.speed < 10):
-            self.speed = 10
-
-        self.current_mode.mode = self.main
-        self.mode_pub.publish(self.current_mode)	
-        
 def main():
     rospy.init_node("tang_control", anonymous=True)
     instance = TangController()
     rate = rospy.Rate(10)
+    cnt = 0
     while not rospy.is_shutdown():
+        cnt = instance.change_move_speed(cnt)
         instance.mode_change()
         rate.sleep()
     rospy.spin()
