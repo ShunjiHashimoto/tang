@@ -7,6 +7,7 @@ from sensor_msgs.msg import Joy
 from tang_msgs.msg import HumanInfo, Modechange
 from geometry_msgs.msg import Twist
 import spidev
+import lcd_display
 
 p_gain = 15.0 
 d_gain = 7.0
@@ -71,6 +72,8 @@ class TangController():
         self.depth_min_thresh = 0.8
         self.dt = 0.1
         self.prev_joystick_switch = 1023
+        # LCD Display
+        self.mylcd = lcd_display.lcd()
 
         GPIO.add_event_detect(teleop_mode_gpio, GPIO.FALLING, callback=self.callback_switch_on, bouncetime=1000)
         GPIO.add_event_detect(follow_mode_gpio, GPIO.FALLING, callback=self.callback_switch_on, bouncetime=1000)
@@ -105,39 +108,55 @@ class TangController():
             if(cnt > 30):
                 self.speed += 10
                 print("speed up: ", self.speed)
+                self.mylcd.lcd_display_string("Speed: " + str(self.speed), 2)
                 cnt = 0
         else:
             cnt = 0
         return cnt
+    
+    def nomarilze_speed(self, motor_r, motor_l):
+        if(motor_r >= 100): motor_r = 100
+        if(motor_r <= -100): motor_r = -100
+        if(motor_l >= 100): motor_l = 100
+        if(motor_l <= -100): motor_l = -100
+        return abs(motor_r), abs(motor_l)
 
     def mode_change(self):
         if self.main == 0:
             # Read the joystick position data
-            vrx_pos = (self.read_channel(vrx_channel) -515)/15
-            vry_pos = (self.read_channel(vry_channel ) -515)/15
+            vrx_pos = (self.read_channel(vrx_channel) -515)/8
+            vry_pos = (self.read_channel(vry_channel ) -515)/8
             # Read switch state
-            # print("X : {}  Y : {} ".format(vrx_pos,vry_pos))
-            # motor_l = self.joy_l
-            # motor_r = self.joy_r
-            # print(motor_r, motor_l)
-            # time.sleep(0.1)
+            print("X_flat : {}  Y_verti : {} ".format(vrx_pos, vry_pos))
             motor_r = motor_l = vry_pos
-            if(vrx_pos >= 0):
-                motor_r += vrx_pos 
-            else:    
-                motor_l += (-vrx_pos)
-            if motor_l >= 0 and motor_r >= 0:
+            if(vrx_pos >= 0 and vry_pos >= 0):
+                motor_l -= vrx_pos
                 GPIO.output(gpio_pin_r, GPIO.HIGH)
                 GPIO.output(gpio_pin_l, GPIO.HIGH)
-                p_r.ChangeDutyCycle(motor_r)
-                p_l.ChangeDutyCycle(motor_l)
-                rospy.loginfo("Go! | motor_l : %d | motor_r: %d", motor_l, motor_r)
-            elif motor_l < 0 and motor_r < 0:
+
+            elif(vrx_pos >= 0 and vry_pos < 0):
+                motor_l += vrx_pos
                 GPIO.output(gpio_pin_r, GPIO.LOW)
                 GPIO.output(gpio_pin_l, GPIO.LOW)
-                p_r.ChangeDutyCycle(-(motor_r))
-                p_l.ChangeDutyCycle(-(motor_l*1.1))
-                rospy.loginfo("Back! | motor_l : %d | motor_r: %d", motor_l, motor_r)
+
+            elif(vrx_pos < 0 and vry_pos >= 0):
+                motor_r += vrx_pos
+                GPIO.output(gpio_pin_r, GPIO.HIGH)
+                GPIO.output(gpio_pin_l, GPIO.HIGH)
+
+            elif(vrx_pos < 0 and vry_pos < 0):
+                motor_r -= vrx_pos
+                GPIO.output(gpio_pin_r, GPIO.LOW)
+                GPIO.output(gpio_pin_l, GPIO.LOW)
+
+            else:    
+                print("Nothing") 
+                
+            motor_r, motor_l = self.nomarilze_speed(motor_r, motor_l)
+            p_r.ChangeDutyCycle(motor_r)
+            p_l.ChangeDutyCycle(motor_l)    
+            
+            rospy.loginfo("motor_l : %d | motor_r: %d", motor_l, motor_r)
             return
         
         elif self.main == 1:
@@ -188,17 +207,12 @@ class TangController():
             p_r.ChangeDutyCycle(motor_r)
             p_l.ChangeDutyCycle(motor_l)
             return
-
         
     def p_control(self, cur_pos):
         """
         @fn p_control()
         @details P制御
         """
-        # p_gain = 0.04
-        # p_gain = 4.3
-        #p_gain = 10
-        #d_gain = 7.0
         current_command = p_gain * (self.ref_pos - cur_pos) + d_gain*((self.ref_pos - cur_pos) - self.prev_command)/self.dt
         self.prev_command = self.ref_pos - cur_pos
         print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
