@@ -1,3 +1,0 @@
-int64 current_mode
-float64 realsense_thresh
-float64 red_thresh
