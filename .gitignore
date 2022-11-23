@@ -7,3 +7,5 @@ display_ip.py
 *.sh
 *.desktop
 *.JPG
+tang_control/scripts/lcd_display.py
+tang_teleop/scripts/utils/display_ip.py
