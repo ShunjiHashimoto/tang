@@ -2,3 +2,8 @@
 __pycache__
 videos
 *.pyc
+*.png
+display_ip.py
+*.sh
+*.desktop
+*.JPG

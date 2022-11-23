@@ -10,6 +10,8 @@ from scipy.stats import multivariate_normal
 from matplotlib.patches import Ellipse
 import matplotlib.patches as patches
 
+MAHARANOBIS_THRESHOLD = 59
+
 class KalmanFilter():
     """
     @class KalmanFilter
@@ -23,7 +25,7 @@ class KalmanFilter():
         self.sigma_vx = 0.01 # depth
         self.sigma_vy = 0.01 # right and left
         self.sigma_vz = 0.01 # tall
-        self.time_interval = 0.17
+        self.time_interval = 0.07
 
     # 誤差楕円
     # p：楕円の中心座標（x, y）
@@ -182,8 +184,12 @@ class KalmanFilter():
         # calc maharanobis distance
         S = Q + np.dot(np.dot(H, cov_t_1), H.T)
         d2 = np.dot(np.dot(z_error, np.linalg.inv(S)), z_error.reshape(-1, 1))
-        if(d2 > 59 and zt_1[0] != 0.000): 
+        print("マハラノビス距離", d2)
+        if(d2 > MAHARANOBIS_THRESHOLD and zt_1[0] != 0.000): 
             print("out layer", d2, "観測値z", z)
+            # 平均値、分散をリセットする
+            self.belief.mean = zt_1
+            self.belief.cov = np.diag([1e-10, 1e-10, 1e-10, 1e-10, 1e-10])
             return 
         K = np.dot(np.dot(cov_t_1, H.T), np.linalg.inv(S))
         self.belief.mean += np.dot(K, z_error)  # 平均値更新

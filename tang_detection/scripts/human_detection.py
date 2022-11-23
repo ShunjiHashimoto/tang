@@ -38,7 +38,7 @@ import matplotlib.pyplot as plt
 decimate = rs.decimation_filter()
 decimate.set_option(rs.option.filter_magnitude, 1)
 
-# spatial_filterのパラメータ
+# spatial_filterのパラメータ(平滑化)
 spatial = rs.spatial_filter()
 spatial.set_option(rs.option.filter_magnitude, 1)
 spatial.set_option(rs.option.filter_smooth_alpha, 0.25)
@@ -107,13 +107,10 @@ class DetectNet():
 
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
-        # create video sources
-        self.input = jetson_utils.videoSource("/dev/video2")
         # create video output object
         self.output = jetson_utils.videoOutput("display://0")
         # load the object detection network
-        self.net = jetson_inference.detectNet(
-            "ssd-mobilenet-v2", threshold=0.5)
+        self.net = jetson_inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
         # publisher
         self.pubmsg = PubMsg()
         # subscriber
@@ -124,7 +121,7 @@ class DetectNet():
         self.current_mode = Modechange()
         self.human_point_pixel = Point()
         self.human_point_pixel.z = 1.0
-        self.current_mode.realsense_depth_thresh = 1.0
+        self.current_mode.realsense_depth_thresh = rospy.get_param("/tang_detection/threshold")
         self.current_mode.mode = 1
         self.debug = rospy.get_param("/tang_detection/debug")
         # KalmanFileter Parameter
@@ -165,8 +162,7 @@ class DetectNet():
         depth_image = np.asanyarray(result_frame.get_data())
         depth_filtered_image = (depth_image < max_dist) * depth_image
         # 指定距離以上を無視したRGB画像
-        color_filtered_image = (depth_filtered_image.reshape(
-            (HEIGHT, WIDTH, 1)) > 0)*color_image
+        color_filtered_image = (depth_filtered_image.reshape((HEIGHT, WIDTH, 1)) > 0)*color_image
         return color_filtered_image, result_frame
 
     def calc_delta_time(self):
@@ -194,10 +190,9 @@ class DetectNet():
         jetson_utils.cudaDrawCircle(img, (cx, cy), size, color)  # (cx,cy), radius, color
         self.output.Render(img)
 
-    def output_image(self):
+    def output_image(self, time):
         # update the title bar
-        self.output.SetStatus(
-            "Object Detection | Network {:.0f} FPS".format(self.net.GetNetworkFPS()))
+        self.output.SetStatus("Object Detection {:.3f} sec | 人の座標 x:{:.3f} y:{:.3f}".format(time, self.human_info.human_point.x, self.human_info.human_point.y))
 
     def estimate_human_position(self, img):
         """
@@ -222,7 +217,7 @@ class DetectNet():
 
         # exit on input/output EOS
         # TODO: human_posを[m]でpubする
-        if not self.input.IsStreaming() and self.human_info.is_human == 1:
+        if self.human_info.is_human == 1:
             self.human_point_pixel.x = human_pos[0]  # [pixel]
             self.human_point_pixel.y = human_pos[1]  # [pixel]
             self.human_info.max_area = max_area
@@ -247,7 +242,6 @@ class DetectNet():
         joyから距離のthreshholdを変更できるようにしたい
         """
         # realsense setting
-        align = rs.align(rs.stream.color)
         pipeline = rs.pipeline()
         config = rs.config()
         # Get device product line for setting a supporting resolution
@@ -257,9 +251,9 @@ class DetectNet():
         device_product_line = str(device.get_info(rs.camera_info.product_line))
 
         config.enable_stream(rs.stream.color, WIDTH,
-                             HEIGHT, rs.format.bgr8, FPS)
+                             HEIGHT, rs.format.bgr8, 30)
         config.enable_stream(rs.stream.depth, WIDTH,
-                             HEIGHT, rs.format.z16, FPS)
+                             HEIGHT, rs.format.z16, 30)
         
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
@@ -267,7 +261,7 @@ class DetectNet():
         color_intr = rs.video_stream_profile(
             profile.get_stream(rs.stream.color)).get_intrinsics()
 
-        r = rospy.Rate(10)  # 10hz
+        r = rospy.Rate(100)  # 10hz
 
         # realsensenの認識距離設定
         max_dist = self.current_mode.realsense_depth_thresh/depth_scale
@@ -275,6 +269,7 @@ class DetectNet():
         ## first calculate
         # フレーム取得
         frames = pipeline.wait_for_frames()
+        align = rs.align(rs.stream.color)
         frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
         # copy to CUDA memory
         cuda_mem = jetson_utils.cudaFromNumpy(frame)
@@ -295,13 +290,10 @@ class DetectNet():
                 frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
                 if not frame.any():
                     print("frame nothing")
-                    # continue
                 cuda_mem = jetson_utils.cudaFromNumpy(frame)
                 delta_t = self.calc_delta_time()
-                print("処理時間", delta_t)
 
                 if(self.current_mode.mode == 0):
-                    # rospy.loginfo("teleop mode")
                     r.sleep()
 
                 elif (self.current_mode.mode == 1):
@@ -333,8 +325,8 @@ class DetectNet():
                     
                     # Debugパラメータ
                     if (self.debug):
-                        rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
-                        rospy.logwarn("estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
+                        # rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
+                        # rospy.logwarn("estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
                         e = kalman.sigma_ellipse(human_pos_beleif.mean[0:2], human_pos_beleif.cov[0:2, 0:2], 5)
                         self.e_list.append(e)
                         self.X_true.append(self.human_input[0])
@@ -347,9 +339,11 @@ class DetectNet():
                         estimated_3d_pos = self.trans_robot_to_camera(estimated_3d_pos)
                         estimated_point_to_pixel = rs.rs2_project_point_to_pixel(color_intr, estimated_3d_pos)
                         self.render_image(cuda_mem, estimated_point_to_pixel[0], estimated_point_to_pixel[1], (0, 255, 127, 200), human_pos_beleif.mean[0]+0.1)
-                        self.output_image()
+                        self.output_image(delta_t)
 
         finally:
+            pipeline.stop()
+            print("pipelin.stop")
             fig2 = plt.figure(figsize=(8,8)) 
             ax2 = fig2.add_subplot(111)
             ax2.set_aspect('equal')
@@ -364,8 +358,6 @@ class DetectNet():
             ax2.plot(self.X_est, self.Y_est, marker = "*", c="green")
             ax2.plot(self.X_true,self.Y_true , marker = "o", c="blue")
             fig2.savefig("/home/hashimoto/catkin_ws/src/tang/tang_detection/scripts", dpi=300)
-            plt.show()
-            pipeline.stop()
 
 
 if __name__ == "__main__":
