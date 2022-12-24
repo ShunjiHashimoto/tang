@@ -4,7 +4,7 @@ import rospy
 import sys
 import time
 import RPi.GPIO as GPIO
-# import I2C_LCD_driver
+# import lcd_display
 
 def main():
     # modeを選択
@@ -28,7 +28,7 @@ def main():
     GPIO.setup(pwm_pin_l, GPIO.OUT)
     p_l = GPIO.PWM(pwm_pin_l, 40)
     p_l.start(0)
-    # lcd = I2C_LCD_driver.lcd()
+    # lcd = lcd_display.lcd()
     try:
         while (1):
             time.sleep(1)

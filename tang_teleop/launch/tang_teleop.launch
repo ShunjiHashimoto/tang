@@ -10,7 +10,7 @@
     <param name = "speed" type = "int" value = "30"/>
   </node>
   
-  <node name="direction_control" pkg="tang_teleop" type="direction_control.py" output="screen">
-  </node>
+  <!-- <node name="direction_control" pkg="tang_teleop" type="direction_control.py" output="screen">
+  </node> -->
 
 </launch>

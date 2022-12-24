@@ -5,18 +5,10 @@
     <param name="deadzone" value="0.12" />
   </node>
 
-  <node name="tang_detection" pkg="tang_detection" type="realsense_detection.py" output="screen">
-    <param name = "threshold" type = "double" value = "3"/>  <!-- これより遠い距離の画素を無視する -->
-    <!-- camera なら 0, videoなら/home/hashimoto/Videos/capture/original.mp4 -->
-    <!-- <param name = "video_path" value = "/home/hashimoto/catkin_ws/src/tang/tang_detection/videos/yuki.mp4"/>  -->
-    <!-- <param name = "video_path" value = "0"/> -->
-    <!-- <param name = "debug" value="0"/> -->
-  </node>
-
-  <node name="tang_teleop" pkg="tang_teleop" type="tang.py" output="screen">
+  <node name="tang_control" pkg="tang_control" type="tang_control.py" output="screen">
     <param name = "max_area" type = "int" value = "130000"/> 
-    <param name = "max_area_red" type = "int" value = "70"/> 
+    <param name = "max_area_red" type = "int" value = "167"/> 
     <param name = "speed" type = "int" value = "30"/>
   </node>
-
+  
 </launch>

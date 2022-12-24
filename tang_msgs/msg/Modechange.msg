@@ -1,0 +1,2 @@
+int64 mode
+float64 realsense_depth_thresh

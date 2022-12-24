@@ -1,0 +1,2 @@
+geometry_msgs/Point obs_pos
+geometry_msgs/Point est_pos

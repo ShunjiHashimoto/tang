@@ -5,8 +5,7 @@
   <description>The tang_teleop package</description>
 
   <maintainer email="h.shunji1206@gmail.com">Shunji Hashimoto</maintainer>
-
-  <license>TODO</license>
+  <license>Apache License 2.0</license>
 
   <build_depend>message_generation</build_depend> 
   <exec_depend>message_runtime</exec_depend> 
@@ -23,9 +22,4 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>message_runtime</exec_depend>
 
-  <!-- The export tag contains other, unspecified, tags -->
-  <export>
-    <!-- Other tools can request additional information be placed here -->
-
-  </export>
 </package>
