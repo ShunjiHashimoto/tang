@@ -234,6 +234,9 @@ class DetectNet():
         vy = (position_3d_from_robot.y - self.prev_human_input[1])/delta_t
         self.human_input = np.array([position_3d_from_robot.x, position_3d_from_robot.y, position_3d_from_robot.z, vx, vy]).T
         return position_3d_from_robot
+    
+    def gyro_data(self, gyro):
+        return np.asarray([gyro.x, gyro.y, gyro.z])
 
     def main_loop(self):
         """
@@ -254,6 +257,8 @@ class DetectNet():
                              HEIGHT, rs.format.bgr8, 30)
         config.enable_stream(rs.stream.depth, WIDTH,
                              HEIGHT, rs.format.z16, 30)
+        config.enable_stream(rs.stream.accel)
+        config.enable_stream(rs.stream.gyro)
         
         profile = pipeline.start(config)
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
@@ -290,6 +295,9 @@ class DetectNet():
                 frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
                 if not frame.any():
                     print("frame nothing")
+                if frames[3].is_motion_frame():
+                    gyro = self.gyro_data(frames[3].as_motion_frame().get_motion_data())
+                    print("gyro: ", gyro)
                 cuda_mem = jetson_utils.cudaFromNumpy(frame)
                 delta_t = self.calc_delta_time()
 
