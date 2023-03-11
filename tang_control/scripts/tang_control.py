@@ -85,9 +85,11 @@ class TangController():
     def cmd_callback(self, msg):
         # 人の位置とサイズを得る
         self.human_info = msg
+        return
     
     def imu_callback(self, msg):
         self.cmdvel_from_imu = msg
+        return
 
     def change_velocity(self, cnt):
         if(self.speed == 90):
@@ -207,6 +209,7 @@ class TangController():
             self.manual_control()
         elif self.main == 1:
             self.follow_control()
+        return 
             
 def main():
     rospy.init_node("tang_control", anonymous=True)
