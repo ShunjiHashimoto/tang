@@ -146,23 +146,19 @@ class TangController():
         if(vry_pos > 1.0):
             # 左旋回
             if(vrx_pos < -1.0):
-                # print("mode 1")
                 motor_r = vry_pos
                 motor_l = vry_pos + vrx_pos
             # 右旋回
             else:
-                # print("mode 2")
                 motor_r = vry_pos - vrx_pos
                 motor_l = vry_pos 
             if(motor_l < 0): motor_l = 0
             if(motor_r < 0): motor_r = 0
         elif(vry_pos < -1.0):
             if(vrx_pos < -1.0):
-                # print("mode 3")
                 motor_r = -vry_pos - vrx_pos
                 motor_l = -vry_pos 
             else:
-                # print("mode 4")
                 motor_r = -vry_pos 
                 motor_l = -vry_pos + vrx_pos
             if(motor_l < 0): motor_l = 0
