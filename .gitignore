@@ -1,11 +1,9 @@
 .vscode/
 __pycache__
-videos
 *.pyc
-*.png
-display_ip.py
 *.sh
 *.desktop
-*.JPG
 tang_control/scripts/lcd_display.py
 tang_teleop/scripts/utils/display_ip.py
+tang_teleop/scripts/utils/gpio_rasp.py
+tang_teleop/scripts/utils/lcd_display.py
