@@ -8,7 +8,7 @@ from tang_msgs.msg import HumanInfo
 from visualization_msgs.msg import Marker
 import geometry_msgs.msg
 
-class DisplayHumanpos():
+class HumanPosDisplayer():
     def __init__(self):
         self.human_info = HumanInfo()
         self.human_info_sub     = rospy.Subscriber('tang_cmd', HumanInfo, self.cmd_callback, queue_size=1)
@@ -73,12 +73,11 @@ class DisplayHumanpos():
     
 def main():
     rospy.init_node("display_humanpos", anonymous=True)
-    displayer = DisplayHumanpos()
+    human_pos_displayer = HumanPosDisplayer()
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
-        displayer.pub_humanpos()
-        displayer.pub_tf()
-        print("loop ", flush=True)
+        human_pos_displayer.pub_humanpos()
+        human_pos_displayer.pub_tf()
         rate.sleep()
     rospy.spin()
 

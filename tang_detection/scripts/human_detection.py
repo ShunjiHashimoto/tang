@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-@file rl_detectnet.py
+@file human_detection.py
 @brief realsenseで背景処理を行い、人物を推定する、また赤色検出を行う
 """
 
@@ -80,29 +80,10 @@ GPIO.add_event_detect(left_gear_pin, GPIO.BOTH, bouncetime=1)
 GPIO.add_event_callback(right_gear_pin, add_right_gear_count) 
 GPIO.add_event_callback(left_gear_pin, add_left_gear_count) 
 
-class PubMsg():
+class HumanDetector():
     """
-    @class PubMsg
-    @brief 目標位置と物体の大きさをPub
-    """
-
-    def __init__(self):
-        self.publisher = rospy.Publisher('tang_cmd', HumanInfo, queue_size=1)
-        self.human_info = HumanInfo()
-
-    def pub(self, cmd):
-        """
-        @fn pub()
-        @details 検出した人の位置と大きさをpub
-        """
-        self.human_info = cmd
-        self.publisher.publish(self.human_info)
-
-
-class DetectNet():
-    """
-    @class DetectNet
-    @brief 人物検出&赤検出クラス
+    @class HumanDetector
+    @brief 人物検出
     """
 
     def __init__(self):
@@ -112,7 +93,8 @@ class DetectNet():
         # load the object detection network
         self.net = jetson_inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
         # publisher
-        self.pubmsg = PubMsg()
+        self.cmd_publisher = rospy.Publisher('tang_cmd', HumanInfo, queue_size=1)
+        self.human_info = HumanInfo()
         # subscriber
         rospy.Subscriber("current_param", Modechange, self.mode_callback, queue_size=1)
         rospy.Subscriber("imu", Imu, self._imu_callback)
@@ -329,7 +311,7 @@ class DetectNet():
                     
                     self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
                                                       human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
-                    self.pubmsg.pub(self.human_info)
+                    self.cmd_publisher.publish(self.human_info)
                     
                     # Debugパラメータ
                     if (self.debug):
@@ -363,11 +345,11 @@ class DetectNet():
             ax2.legend(["Estimated", "Observed"])
             for e in self.e_list:
                 ax2.add_patch(e)
-            ax2.plot(self.X_est, self.Y_est, marker = "*", c="green")
-            ax2.plot(self.X_true,self.Y_true , marker = "o", c="blue")
+            ax2.plot(self.X_est, self.Y_est, marker = "*", c = "green")
+            ax2.plot(self.X_true,self.Y_true , marker = "o", c = "blue")
             fig2.savefig("/home/hashimoto/catkin_ws/src/tang/tang_detection/scripts", dpi=300)
 
 
 if __name__ == "__main__":
-    detectnet = DetectNet()
-    detectnet.main_loop()
+    human_detector = HumanDetector()
+    human_detector.main_loop()
