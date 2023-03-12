@@ -94,7 +94,6 @@ class HumanDetector():
         self.net = jetson_inference.detectNet("ssd-mobilenet-v2", threshold=0.5)
         # publisher
         self.cmd_publisher = rospy.Publisher('tang_cmd', HumanInfo, queue_size=1)
-        self.human_info = HumanInfo()
         # subscriber
         rospy.Subscriber("current_param", Modechange, self.mode_callback, queue_size=1)
         rospy.Subscriber("imu", Imu, self._imu_callback)
@@ -216,9 +215,6 @@ class HumanDetector():
         vy = (position_3d_from_robot.y - self.prev_human_input[1])/delta_t
         self.human_input = np.array([position_3d_from_robot.x, position_3d_from_robot.y, position_3d_from_robot.z, vx, vy]).T
         return position_3d_from_robot
-    
-    def gyro_data(self, gyro):
-        return np.asarray([gyro.x, gyro.y, gyro.z])
 
     def main_loop(self):
         """
@@ -277,9 +273,6 @@ class HumanDetector():
                 frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
                 if not frame.any():
                     print("frame nothing")
-                if frames[3].is_motion_frame():
-                    gyro = self.gyro_data(frames[3].as_motion_frame().get_motion_data())
-                    print("gyro: ", gyro)
                 cuda_mem = jetson_utils.cudaFromNumpy(frame)
                 delta_t = self.calc_delta_time()
 

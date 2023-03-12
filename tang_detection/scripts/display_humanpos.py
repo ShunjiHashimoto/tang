@@ -25,7 +25,7 @@ class HumanPosDisplayer():
         static_transformStamped.transform.translation.y = 0.0
         static_transformStamped.transform.translation.z = 0.0
 
-        quat = tf.transformations.quaternion_from_euler(float(0),float(0),float(0))
+        quat = tf.transformations.quaternion_from_euler(float(0), float(0), float(0))
         static_transformStamped.transform.rotation.x = quat[0]
         static_transformStamped.transform.rotation.y = quat[1]
         static_transformStamped.transform.rotation.z = quat[2]
@@ -70,7 +70,7 @@ class HumanPosDisplayer():
     def cmd_callback(self, msg):
         # 人の位置とサイズを得る
         self.human_info = msg
-    
+
 def main():
     rospy.init_node("display_humanpos", anonymous=True)
     human_pos_displayer = HumanPosDisplayer()
