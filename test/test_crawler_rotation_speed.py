@@ -26,11 +26,11 @@ def main():
     GPIO.output(gpio_pin_r, GPIO.HIGH)
     GPIO.output(gpio_pin_l, GPIO.HIGH)
 
-    #パラメータ変換
+    # パラメータ変換
     l_cnv_dutycycle = int((duty * 1000000 / 100))
     r_cnv_dutycycle = int((duty * 1000000 / 100))
 
-    #PWMを出力
+    # PWMを出力
     pi.hardware_PWM(r_pwm_pin, freq, r_cnv_dutycycle)
     pi.hardware_PWM(l_pwm_pin, freq, l_cnv_dutycycle)
 
