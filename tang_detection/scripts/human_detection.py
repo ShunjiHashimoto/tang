@@ -175,9 +175,9 @@ class HumanDetector():
         # update the title bar
         self.output.SetStatus("Object Detection {:.3f} sec | 人の座標 x:{:.3f} y:{:.3f}".format(time, self.human_info.human_point.x, self.human_info.human_point.y))
 
-    def estimate_human_position(self, img):
+    def detect_human(self, img):
         """
-        @fn estimate_human_position()
+        @fn detect_human()
         @param img 背景処理された画像
         @details darknetを用いて人検出
         """
@@ -257,7 +257,7 @@ class HumanDetector():
         # copy to CUDA memory
         cuda_mem = jetson_utils.cudaFromNumpy(frame)
         delta_t = self.calc_delta_time()
-        self.estimate_human_position(cuda_mem)
+        self.detect_human(cuda_mem)
         self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
         self.human_info.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
 
@@ -280,20 +280,20 @@ class HumanDetector():
                     r.sleep()
 
                 elif (self.current_mode.mode == 1):
-                    self.estimate_human_position(cuda_mem)
+                    self.detect_human(cuda_mem)
                     vel_r = calc_velocity(cnt_list[0], delta_t)
                     vel_l = calc_velocity(cnt_list[1], delta_t)
                     robot_vw[0] = (vel_l+vel_r)/2
                     if(robot_vw[0] == 0.0): robot_vw[0] = 0.000001
-                    cnt_list[0] = cnt_list[1] = 0
+                    cnt_list[0] = 0
+                    cnt_list[1] = 0
                     robot_vw[1] = self._imu_data_raw.angular_velocity.z
-                    if(robot_vw[1] == 0.0):
-                        robot_vw[1] = 0.000001
+                    if(robot_vw[1] == 0.0): robot_vw[1] = 0.000001
 
                     # 人の位置をPub、もし人が見えていれば観測値をPub、見えなければ推測値をPubする    
                     if (self.human_info.is_human == 1):
                         self.human_info.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
-                        human_pos_beleif = kalman.main_loop(self.prev_human_input, self.human_input, robot_vw, delta_t)
+                        human_pos_beleif = kalman.main_loop(self.human_input, robot_vw, delta_t)
                         self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
                         # print("分散：　", human_pos_beleif.cov)
                     else:
@@ -303,7 +303,7 @@ class HumanDetector():
                         self.human_info.human_point.z = human_pos_beleif.mean[2] 
                     
                     self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
-                                                      human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
+                                                        human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
                     self.cmd_publisher.publish(self.human_info)
                     
                     # Debugパラメータ
@@ -340,7 +340,7 @@ class HumanDetector():
                 ax2.add_patch(e)
             ax2.plot(self.X_est, self.Y_est, marker = "*", c = "green")
             ax2.plot(self.X_true,self.Y_true , marker = "o", c = "blue")
-            fig2.savefig("/home/hashimoto/catkin_ws/src/tang/tang_detection/scripts", dpi=300)
+            fig2.savefig("/home/hashimoto/catkin_ws/src/tang/tang_detection/images/follow_data.png", dpi=300)
 
 
 if __name__ == "__main__":
