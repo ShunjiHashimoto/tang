@@ -4,88 +4,108 @@
 @file human_detection.py
 @brief realsenseで背景処理を行い、人物を推定する、また赤色検出を行う
 """
-
+import time
+import math
+import numpy as np
+from scipy.spatial.transform import Rotation
+import Jetson.GPIO as GPIO
+import matplotlib.pyplot as plt
+from config import CameraConfig, GearConfig
 # ros
 import rospy
 import roslib.packages
 from tang_msgs.msg import HumanInfo, Modechange
-from sensor_msgs.msg import Joy
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Joy, Imu
 from geometry_msgs.msg import Point
-
 # detectnet
 import jetson_inference
 import jetson_utils
-import argparse
-
 # Kalmanfilter
 from mymodule import kalmanfilter
-
 # realsense
 import pyrealsense2 as rs
 
-# others
-import sys
-import numpy as np
-from numpy.lib.function_base import copy
-import time
-from scipy.spatial.transform import Rotation
-import math
-import Jetson.GPIO as GPIO
-import matplotlib.pyplot as plt
+class GearCounter:
+    def __init__(self):
+        self.cnt_list = [0, 0]
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(GearConfig.right_gear_pin, GPIO.IN)
+        GPIO.setup(GearConfig.left_gear_pin, GPIO.IN)
+        # bouncetimeは割り込みを行った後設定された時間は割り込みを検知しないという糸
+        GPIO.add_event_detect(GearConfig.right_gear_pin, GPIO.BOTH, bouncetime=1)
+        GPIO.add_event_detect(GearConfig.left_gear_pin, GPIO.BOTH, bouncetime=1)
+        # コールバック関数登録
+        GPIO.add_event_callback(GearConfig.right_gear_pin, self.add_right_gear_count) 
+        GPIO.add_event_callback(GearConfig.left_gear_pin, self.add_left_gear_count)
+    
+    # Calc Gear Sensor Parameter
+    def add_right_gear_count(self, channel):
+        self.cnt_list[0]+=1
 
-# decimarion_filterのパラメータ
-decimate = rs.decimation_filter()
-decimate.set_option(rs.option.filter_magnitude, 1)
+    def add_left_gear_count(self, channel):
+        self.cnt_list[1]+=1
+    
+    def calc_velocity(self, count, time):
+        return GearConfig.Pitch*count/time #[m/s]
 
-# spatial_filterのパラメータ(平滑化)
-spatial = rs.spatial_filter()
-spatial.set_option(rs.option.filter_magnitude, 1)
-spatial.set_option(rs.option.filter_smooth_alpha, 0.25)
-spatial.set_option(rs.option.filter_smooth_delta, 50)
-
-# hole_filling_filterのパラメータ
-hole_filling = rs.hole_filling_filter()
-
-# disparity
-depth_to_disparity = rs.disparity_transform(True)
-disparity_to_depth = rs.disparity_transform(False)
-
-WIDTH = 640
-HEIGHT = 480
-FPS = 60
-
-# Calc Gear Sensor Parameter
-def add_right_gear_count(channel):
-    cnt_list[0]+=1
-
-def add_left_gear_count(channel):
-    cnt_list[1]+=1
-
-def calc_velocity(count, time):
-    return Pitch*count/time #[m/s]
-
-Pitch = 6.1850105367549055/2/1000
-cnt_list = [0, 0]
-GPIO.setmode(GPIO.BCM)
-# 割り込みイベント設定
-right_gear_pin = 24
-left_gear_pin = 22
-GPIO.setup(right_gear_pin, GPIO.IN)
-GPIO.setup(left_gear_pin, GPIO.IN)
-# bouncetimeは割り込みを行った後設定された時間は割り込みを検知しないという糸
-GPIO.add_event_detect(right_gear_pin, GPIO.BOTH, bouncetime=1)
-GPIO.add_event_detect(left_gear_pin, GPIO.BOTH, bouncetime=1)
-# コールバック関数登録
-GPIO.add_event_callback(right_gear_pin, add_right_gear_count) 
-GPIO.add_event_callback(left_gear_pin, add_left_gear_count) 
+class RealSenseCamera():
+    def __init__(self):
+        self.pipeline = rs.pipeline()
+        self.config = rs.config()
+        self.profile = None
+        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        # Get device product line for setting a supporting resolution
+        pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
+        pipeline_profile = self.config.resolve(pipeline_wrapper)
+        device = pipeline_profile.get_device()
+        device_product_line = str(device.get_info(rs.camera_info.product_line))
+        self.config.enable_stream(rs.stream.color, CameraConfig.WIDTH , CameraConfig.HEIGHT, rs.format.rgb8, 30)
+        self.config.enable_stream(rs.stream.depth, CameraConfig.WIDTH , CameraConfig.HEIGHT, rs.format.z16, 30)
+        self.config.enable_stream(rs.stream.accel)
+        self.config.enable_stream(rs.stream.gyro)
+    
+    def start(self):
+        self.profile = self.pipeline.start(self.config)
+    
+    def get_intrinsics(self):
+        return rs.video_stream_profile(self.profile.get_stream(rs.stream.color)).get_intrinsics()
+    
+    def _get_filtered_frame(self, align, frames, max_dist):
+        aligned_frames = align.process(frames)
+        color_frame = aligned_frames.get_color_frame()
+        depth_frame = aligned_frames.get_depth_frame()
+        filter_frame = CameraConfig.decimate.process(depth_frame)
+        filter_frame = CameraConfig.depth_to_disparity.process(filter_frame)
+        filter_frame = CameraConfig.spatial.process(filter_frame)
+        filter_frame = CameraConfig.disparity_to_depth.process(filter_frame)
+        filter_frame = CameraConfig.hole_filling.process(filter_frame)
+        result_frame = filter_frame.as_depth_frame()
+        # RGB画像
+        color_image = np.asanyarray(color_frame.get_data())
+        # 指定距離以上を無視した深度画像
+        depth_image = np.asanyarray(result_frame.get_data())
+        depth_filtered_image = (depth_image < max_dist) * depth_image
+        # 指定距離以上を無視したRGB画像
+        color_filtered_image = (depth_filtered_image.reshape((CameraConfig.HEIGHT, CameraConfig.WIDTH, 1)) > 0)*color_image
+        return color_filtered_image, result_frame
+    
+    def get_frame(self):
+        frames = self.pipeline.wait_for_frames()
+        depth_scale = self.profile.get_device().first_depth_sensor().get_depth_scale()
+        align = rs.align(rs.stream.color)
+        # realsensenの認識距離設定
+        max_dist = CameraConfig.depth_thresh/depth_scale
+        frame, depth_frame = self._get_filtered_frame(align, frames, max_dist)
+        return frame, depth_frame
+    
+    def stop(self):
+        self.pipeline.stop()
 
 class HumanDetector():
     """
     @class HumanDetector
     @brief 人物検出
     """
-
     def __init__(self):
         rospy.init_node('human_detection', anonymous=True)
         # create video output object
@@ -111,40 +131,20 @@ class HumanDetector():
         self.prev_human_input = np.array([1.0, 0.0, 0.0, 0.001, 0.0]).T
         # IMU Parameter
         self._imu_data_raw = Imu()
-        self._heading_angle = 0.0
         # graph setting
         self.X_est = []
         self.Y_est = []
         self.X_true = []
         self.Y_true = []
         self.e_list = []
-    
-    def _quaternion_to_euler_zyx(self, q):
-        r = Rotation.from_quat([q.x, q.y, q.z, q.w])
-        return r.as_euler('xyz', degrees=True)
+        # Camera
+        self.real_sense_camera = RealSenseCamera()
+        self.real_sense_camera.start()
+        # Gear
+        self.gear_counter = GearCounter()
     
     def _imu_callback(self, imu_msg):
         self._imu_data_raw = imu_msg
-        self._heading_angle  = self._quaternion_to_euler_zyx(self._imu_data_raw.orientation)[2]
-
-    def get_filtered_frame(self, align, frames, max_dist):
-        aligned_frames = align.process(frames)
-        color_frame = aligned_frames.get_color_frame()
-        depth_frame = aligned_frames.get_depth_frame()
-        filter_frame = decimate.process(depth_frame)
-        filter_frame = depth_to_disparity.process(filter_frame)
-        filter_frame = spatial.process(filter_frame)
-        filter_frame = disparity_to_depth.process(filter_frame)
-        filter_frame = hole_filling.process(filter_frame)
-        result_frame = filter_frame.as_depth_frame()
-        # RGB画像
-        color_image = np.asanyarray(color_frame.get_data())
-        # 指定距離以上を無視した深度画像
-        depth_image = np.asanyarray(result_frame.get_data())
-        depth_filtered_image = (depth_image < max_dist) * depth_image
-        # 指定距離以上を無視したRGB画像
-        color_filtered_image = (depth_filtered_image.reshape((HEIGHT, WIDTH, 1)) > 0)*color_image
-        return color_filtered_image, result_frame
 
     def calc_delta_time(self):
         now = rospy.Time.now().to_sec()
@@ -174,7 +174,7 @@ class HumanDetector():
     def output_image(self, time):
         # update the title bar
         self.output.SetStatus("Object Detection {:.3f} sec | 人の座標 x:{:.3f} y:{:.3f}".format(time, self.human_info.human_point.x, self.human_info.human_point.y))
-
+    
     def detect_human(self, img):
         """
         @fn detect_human()
@@ -206,7 +206,8 @@ class HumanDetector():
             self.human_info.max_area = 0
             self.human_info.is_human = 0
         return
-
+    
+    # KFに渡す入力を計算
     def calc_human_input(self, color_intr, pose, delta_t):
         position_3d = rs.rs2_deproject_pixel_to_point(color_intr, [int(pose.x), int(pose.y)], pose.z)
         position_3d_from_robot = self.trans_camera_to_robot(position_3d)
@@ -216,63 +217,29 @@ class HumanDetector():
         self.human_input = np.array([position_3d_from_robot.x, position_3d_from_robot.y, position_3d_from_robot.z, vx, vy]).T
         return position_3d_from_robot
 
-    def main_loop(self):
+    def human_detection(self):
         """
-        @fn main_loop()
+        @fn human_detection()
         @brief 背景処理後、numpyからcuda_imgに変換、人物検出を行う
-        joyから距離のthreshholdを変更できるようにしたい
-        """
-        # realsense setting
-        pipeline = rs.pipeline()
-        config = rs.config()
-        # Get device product line for setting a supporting resolution
-        pipeline_wrapper = rs.pipeline_wrapper(pipeline)
-        pipeline_profile = config.resolve(pipeline_wrapper)
-        device = pipeline_profile.get_device()
-        device_product_line = str(device.get_info(rs.camera_info.product_line))
-
-        config.enable_stream(rs.stream.color, WIDTH,
-                             HEIGHT, rs.format.bgr8, 30)
-        config.enable_stream(rs.stream.depth, WIDTH,
-                             HEIGHT, rs.format.z16, 30)
-        config.enable_stream(rs.stream.accel)
-        config.enable_stream(rs.stream.gyro)
-        
-        profile = pipeline.start(config)
-        depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
-        # 内部パラメータ取得
-        color_intr = rs.video_stream_profile(
-            profile.get_stream(rs.stream.color)).get_intrinsics()
-
-        r = rospy.Rate(100)  # 10hz
-
-        # realsensenの認識距離設定
-        max_dist = self.current_mode.realsense_depth_thresh/depth_scale
-
-        ## first calculate
-        # フレーム取得
-        frames = pipeline.wait_for_frames()
-        align = rs.align(rs.stream.color)
-        frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
+        """     
+        r = rospy.Rate(100)  # 10hz   
+        frame, depth_frame = self.real_sense_camera.get_frame()
+        color_intr = self.real_sense_camera.get_intrinsics()
         # copy to CUDA memory
         cuda_mem = jetson_utils.cudaFromNumpy(frame)
-        delta_t = self.calc_delta_time()
+        delta_t  = self.calc_delta_time()
         self.detect_human(cuda_mem)
         self.human_point_pixel.z = depth_frame.get_distance(int(self.human_point_pixel.x), int(self.human_point_pixel.y))
         self.human_info.human_point = self.calc_human_input(color_intr, self.human_point_pixel, delta_t)
-
         # KalmanFileter
         robot_vw = np.array([0.000001, 0.000001])
         kalman = kalmanfilter.KalmanFilter(self.human_input)
-
         rospy.loginfo("Start Human Detection using KF!")
 
         try:
             while not rospy.is_shutdown():
-                frames = pipeline.wait_for_frames()
-                frame, depth_frame = self.get_filtered_frame(align, frames, max_dist)
-                if not frame.any():
-                    print("frame nothing")
+                frame, depth_frame = self.real_sense_camera.get_frame()
+                if not frame.any(): rospy.logerror("frame Nothing")
                 cuda_mem = jetson_utils.cudaFromNumpy(frame)
                 delta_t = self.calc_delta_time()
 
@@ -281,12 +248,12 @@ class HumanDetector():
 
                 elif (self.current_mode.mode == 1):
                     self.detect_human(cuda_mem)
-                    vel_r = calc_velocity(cnt_list[0], delta_t)
-                    vel_l = calc_velocity(cnt_list[1], delta_t)
+                    vel_r = self.gear_counter.calc_velocity(self.gear_counter.cnt_list[0], delta_t)
+                    vel_l = self.gear_counter.calc_velocity(self.gear_counter.cnt_list[1], delta_t)
                     robot_vw[0] = (vel_l+vel_r)/2
                     if(robot_vw[0] == 0.0): robot_vw[0] = 0.000001
-                    cnt_list[0] = 0
-                    cnt_list[1] = 0
+                    self.gear_counter.cnt_list[0] = 0
+                    self.gear_counter.cnt_list[1] = 0
                     robot_vw[1] = self._imu_data_raw.angular_velocity.z
                     if(robot_vw[1] == 0.0): robot_vw[1] = 0.000001
 
@@ -303,7 +270,7 @@ class HumanDetector():
                         self.human_info.human_point.z = human_pos_beleif.mean[2] 
                     
                     self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
-                                                        human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
+                                                      human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
                     self.cmd_publisher.publish(self.human_info)
                     
                     # Debugパラメータ
@@ -325,8 +292,7 @@ class HumanDetector():
                         self.output_image(delta_t)
 
         finally:
-            pipeline.stop()
-            print("pipelin.stop")
+            self.real_sense_camera.stop()
             fig2 = plt.figure(figsize=(8,8)) 
             ax2 = fig2.add_subplot(111)
             ax2.set_aspect('equal')
@@ -342,7 +308,6 @@ class HumanDetector():
             ax2.plot(self.X_true,self.Y_true , marker = "o", c = "blue")
             fig2.savefig("/home/hashimoto/catkin_ws/src/tang/tang_detection/images/follow_data.png", dpi=300)
 
-
 if __name__ == "__main__":
     human_detector = HumanDetector()
-    human_detector.main_loop()
+    human_detector.human_detection()
