@@ -185,7 +185,7 @@ class KalmanFilter():
         # calc maharanobis distance
         S = Q + np.dot(np.dot(H, cov_t_1), H.T)
         d2 = np.dot(np.dot(z_error, np.linalg.inv(S)), z_error.reshape(-1, 1))
-        # print("マハラノビス距離", d2)
+        print("マハラノビス距離", d2)
         if(d2 > MAHARANOBIS_THRESHOLD and zt_1[0] != 0.000): 
             print("out layer", d2, "観測値z", z)
             # 平均値、分散をリセットする

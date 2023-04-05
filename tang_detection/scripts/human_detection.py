@@ -239,7 +239,7 @@ class HumanDetector():
         try:
             while not rospy.is_shutdown():
                 frame, depth_frame = self.real_sense_camera.get_frame()
-                if not frame.any(): rospy.logerror("frame Nothing")
+                if not frame.any(): print("frame Nothing")
                 cuda_mem = jetson_utils.cudaFromNumpy(frame)
                 delta_t = self.calc_delta_time()
 
@@ -268,21 +268,20 @@ class HumanDetector():
                         self.human_info.human_point.x = human_pos_beleif.mean[0]
                         self.human_info.human_point.y = human_pos_beleif.mean[1]
                         self.human_info.human_point.z = human_pos_beleif.mean[2] 
-                    
                     self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
                                                       human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
                     self.cmd_publisher.publish(self.human_info)
+                    # rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
                     
                     # Debugパラメータ
                     if (self.debug):
-                        # rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
                         # rospy.logwarn("estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
-                        e = kalman.sigma_ellipse(human_pos_beleif.mean[0:2], human_pos_beleif.cov[0:2, 0:2], 5)
-                        self.e_list.append(e)
-                        self.X_true.append(self.human_input[0])
-                        self.Y_true.append(self.human_input[1])
-                        self.X_est.append(human_pos_beleif.mean[0])
-                        self.Y_est.append(human_pos_beleif.mean[1])
+                        # e = kalman.sigma_ellipse(human_pos_beleif.mean[0:2], human_pos_beleif.cov[0:2, 0:2], 5)
+                        # self.e_list.append(e)
+                        # self.X_true.append(self.human_input[0])
+                        # self.Y_true.append(self.human_input[1])
+                        # self.X_est.append(human_pos_beleif.mean[0])
+                        # self.Y_est.append(human_pos_beleif.mean[1])
                         self.render_image(cuda_mem, self.human_point_pixel.x, self.human_point_pixel.y, (0, 0, 127, 200), self.human_point_pixel.z+0.1)
                         # estimated 3d_pos to 2d_pos
                         estimated_3d_pos = (human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
