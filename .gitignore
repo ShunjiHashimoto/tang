@@ -3,6 +3,7 @@ __pycache__
 *.pyc
 *.sh
 *.desktop
+*.png
 tang_control/scripts/lcd_display.py
 tang_teleop/scripts/utils/display_ip.py
 tang_teleop/scripts/utils/gpio_rasp.py

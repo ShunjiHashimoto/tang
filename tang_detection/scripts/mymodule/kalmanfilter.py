@@ -17,7 +17,7 @@ class KalmanFilter():
     @class KalmanFilter
     @brief カルマンフィルタを使って人の位置を推定する
     """
-    def __init__(self, human_input):
+    def __init__(self, human_input = np.array([1.0, 0.0, 0.0, 0.001, 0.0]).T):
         self.belief   = multivariate_normal(mean=human_input, cov=np.diag([1e-10, 1e-10, 1e-10, 1e-10, 1e-10]))
         self.w_mean   = 0.0
         self.sigma_wx  = 0.01 # 人の速度に対するノイズ, y方向のノイズが大きいはず
@@ -186,6 +186,7 @@ class KalmanFilter():
         S = Q + np.dot(np.dot(H, cov_t_1), H.T)
         d2 = np.dot(np.dot(z_error, np.linalg.inv(S)), z_error.reshape(-1, 1))
         print("マハラノビス距離", d2)
+        print("分散：", cov_t_1)
         if(d2 > MAHARANOBIS_THRESHOLD and zt_1[0] != 0.000): 
             print("out layer", d2, "観測値z", z)
             # 平均値、分散をリセットする
