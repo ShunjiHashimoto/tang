@@ -136,7 +136,7 @@ class ResultDisplayer():
     def generate_graph_data(self, human_pos_obs, human_pos_beleif):
         # rospy.logwarn("estimated: x:%lf, y:%lf, z:%lf", human_pos_beleif.mean[0], human_pos_beleif.mean[1], human_pos_beleif.mean[2])
         e = self.kalman.sigma_ellipse(human_pos_beleif.mean[0:2], human_pos_beleif.cov[0:2, 0:2], 5)
-        print(human_pos_beleif.cov[0:2, 0:2])
+        # print(human_pos_beleif.cov[0:2, 0:2])
         self.e_list.append(e)
         self.X_true.append(human_pos_obs[0])
         self.Y_true.append(human_pos_obs[1])
@@ -244,6 +244,7 @@ class HumanFollower():
             delta_t = self.calc_delta_time()
             if(self.current_mode.mode == 0):
                 r.sleep()
+                continue
             human_info, human_point_pixel = self.human_detector.detect_human(cuda_mem)
             vel_r = self.gear_counter.calc_velocity(self.gear_counter.cnt_list[0], delta_t)
             vel_l = self.gear_counter.calc_velocity(self.gear_counter.cnt_list[1], delta_t)
