@@ -218,6 +218,7 @@ def main():
         cnt = tang_controller.change_velocity(cnt)
         tang_controller.change_control_mode()
         rate.sleep()
+    tang_controller.send_vel_cmd(0, 0)
     rospy.spin()
                 
 if __name__ == '__main__':
