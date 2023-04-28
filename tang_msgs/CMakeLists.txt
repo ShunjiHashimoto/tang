@@ -22,6 +22,7 @@ add_message_files(
   HumanInfo.msg
   Modechange.msg
   DetectionResult.msg
+  IsDismiss.msg
 )
 
 ## Generate services in the 'srv' folder

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Imu
 from geometry_msgs.msg import Point
-from tang_msgs.msg import HumanInfo, Modechange
+from tang_msgs.msg import HumanInfo, Modechange, IsDismiss
 from mymodule import kalmanfilter
 from config import CameraConfig, GearConfig
 import jetson_utils
@@ -166,6 +166,8 @@ class HumanFollower():
         rospy.init_node('human_detection', anonymous=True)
         # publisher
         self.cmd_publisher = rospy.Publisher('tang_cmd', HumanInfo, queue_size=1)
+        self.is_dismiss_publisher = rospy.Publisher('is_dismiss', IsDismiss, queue_size=1)
+        self.is_dismiss = IsDismiss()
         # subscriber
         rospy.Subscriber("current_param", Modechange, self.mode_change_callback, queue_size=1)
         rospy.Subscriber("imu", Imu, self._imu_callback)
@@ -238,6 +240,7 @@ class HumanFollower():
         rospy.loginfo("Start Human Detection using KF!")
 
         while not rospy.is_shutdown():
+            self.is_dismiss.flag = False
             frame, depth_frame = self.real_sense_camera.get_frame()
             if not frame.any(): print("frame Nothing")
             cuda_mem = jetson_utils.cudaFromNumpy(frame)
@@ -265,15 +268,16 @@ class HumanFollower():
                 dismiss_human_time += delta_t
                 if dismiss_human_time > 2.0: 
                     human_info.is_human = 0
-                    self.cmd_publisher.publish(human_info)
                     rospy.loginfo("Dissmiss human : %lf", dismiss_human_time)
+                    self.is_dismiss.flag = True
+                    self.is_dismiss_publisher.publish(self.is_dismiss)
                     continue
                 human_pos_beleif = kalman.estimation_nothing_human(robot_vw, delta_t)
-                human_info.human_point.x, human_info.human_point.y, human_info.human_point.z = human_pos_beleif.mean[:3]
+            human_info.human_point.x, human_info.human_point.y, human_info.human_point.z = human_pos_beleif.mean[:3]
             self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
                                               human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
             self.cmd_publisher.publish(human_info)
-            # rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", self.human_input[0], self.human_input[1], self.human_input[2])
+            # rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", human_info.human_point.x, human_info.human_point.y, human_info.human_point.z)
             if (self.debug): 
                 self.result_displayer.display_inference_result(cuda_mem, human_point_pixel, human_pos_beleif, color_intr, delta_t)
                 self.result_displayer.generate_graph_data(human_input, human_pos_beleif)

@@ -10,7 +10,7 @@ import lcd_display
 from config import Pin, PID, PWM, HumanFollowParam
 # ros
 from sensor_msgs.msg import Joy
-from tang_msgs.msg import HumanInfo, Modechange
+from tang_msgs.msg import HumanInfo, Modechange, IsDismiss
 from geometry_msgs.msg import Twist
 
 # modeを選択
@@ -58,6 +58,8 @@ class TangController():
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
         self.human_info_sub = rospy.Subscriber('tang_cmd', HumanInfo, self.cmd_callback, queue_size=1)
         self.imu_sub = rospy.Subscriber('cmdvel_from_imu', Twist, self.imu_callback, queue_size=1)
+        self.is_dismiss_sub = rospy.Subscriber('is_dismiss', IsDismiss, self.dismiss_callback, queue_size=1)
+        self.is_dismiss = IsDismiss()
         # publisher, モードと距離の閾値、赤色検出の閾値をpub
         self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
     
@@ -89,6 +91,10 @@ class TangController():
     
     def imu_callback(self, msg):
         self.cmdvel_from_imu = msg
+        return
+
+    def dismiss_callback(self, msg):
+        self.is_dismiss = msg
         return
 
     def change_velocity(self, cnt):
@@ -170,6 +176,9 @@ class TangController():
 
     def follow_control(self):
         # 速度を距離に従って減衰させる、1m20cm以内で減衰開始する
+        if self.is_dismiss.flag: 
+            self.send_vel_cmd(0, 0)
+            return
         if(self.human_info.human_point.x >= 2.0 or self.human_info.human_point.x < 0.0):
             command_depth = 1.0
         else:
