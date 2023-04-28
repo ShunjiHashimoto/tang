@@ -27,7 +27,7 @@ class CameraConfig:
 class GearConfig:
     Pitch = 6.1850105367549055/2/1000
     right_gear_pin = 24
-    left_gear_pin = 22
+    left_gear_pin = 23
 
 class HumanDetectionConfig:
     # ssd-mobilenet-v2, peoplenet

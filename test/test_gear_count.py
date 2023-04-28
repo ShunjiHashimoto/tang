@@ -23,7 +23,7 @@ def main():
 
     # 割り込みイベント設定
     right_gear_pin = 24
-    left_gear_pin = 22
+    left_gear_pin = 23
     GPIO.setup(right_gear_pin, GPIO.IN)
     GPIO.setup(left_gear_pin, GPIO.IN)
     # bouncetimeは割り込みを行った後設定された時間は割り込みを検知しないという糸

@@ -279,6 +279,7 @@ class HumanFollower():
                 self.result_displayer.generate_graph_data(human_input, human_pos_beleif)
 
         self.real_sense_camera.stop()
+        GPIO.cleanup(GearConfig.right_gear_pin, GearConfig.left_gear_pin)
         self.result_displayer.save_kfdata_graph()
 
 if __name__ == "__main__":
