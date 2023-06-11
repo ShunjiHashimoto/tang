@@ -273,6 +273,8 @@ class HumanFollower():
                     self.is_dismiss_publisher.publish(self.is_dismiss)
                     continue
                 human_pos_beleif = kalman.estimation_nothing_human(robot_vw, delta_t)
+            self.is_dismiss.flag = False
+            self.is_dismiss_publisher.publish(self.is_dismiss)
             human_info.human_point.x, human_info.human_point.y, human_info.human_point.z = human_pos_beleif.mean[:3]
             self.prev_human_input = np.array([human_pos_beleif.mean[0], human_pos_beleif.mean[1],
                                               human_pos_beleif.mean[2], human_pos_beleif.mean[3], human_pos_beleif.mean[4]]).T
