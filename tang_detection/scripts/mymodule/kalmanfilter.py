@@ -17,10 +17,11 @@ class KalmanFilter():
     @class KalmanFilter
     @brief カルマンフィルタを使って人の位置を推定する
     """
-    def __init__(self, human_input):
+    def __init__(self, human_input = np.array([1.0, 0.0, 0.0, 0.001, 0.0]).T):
         self.belief   = multivariate_normal(mean=human_input, cov=np.diag([1e-10, 1e-10, 1e-10, 1e-10, 1e-10]))
         self.w_mean   = 0.0
-        self.sigma_w  = 0.05 # 人の速度に対するノイズ
+        self.sigma_wx  = 0.01 # 人の速度に対するノイズ, y方向のノイズが大きいはず
+        self.sigma_wy  = 0.05
         self.v_mean   = 0.0
         self.sigma_vx = 0.01 # depth
         self.sigma_vy = 0.01 # right and left
@@ -48,7 +49,6 @@ class KalmanFilter():
     @note 状態方程式におけるfx
     """
     def fx(self, xt_1, robot_v, robot_w):
-        if(self.time_interval>1.0): self.time_interval = 0.1
         t = self.time_interval
         delta_theta = robot_w*t
         delta_l = 2*(robot_v/robot_w)*math.sin(delta_theta/2)
@@ -78,7 +78,7 @@ class KalmanFilter():
     """
     def human_state_transition(self, xt_1, robot_vw):
         Fx = self.fx(xt_1, robot_vw[0], robot_vw[1])
-        w = np.array([np.random.normal(self.w_mean, self.sigma_w), np.random.normal(self.w_mean, self.sigma_w)]) # 平均0,0 分散1.0
+        w = np.array([np.random.normal(self.w_mean, self.sigma_wx), np.random.normal(self.w_mean, self.sigma_wy)]) # 平均0,0 分散1.0
         G = self.matG()
         Gw = G.dot(w)
         xt = Fx + Gw
@@ -110,24 +110,25 @@ class KalmanFilter():
 
     # 移動の誤差
     def matM(self):
-        return  np.array([ [self.sigma_w**2, 0.0], [0.0, self.sigma_w**2] ])   
+        return  np.array([ [self.sigma_wx**2, 0.0], [0.0, self.sigma_wy**2] ])   
     
+    # df/dx
     def matF(self, robot_omega):
         delta_theta = robot_omega*self.time_interval
         cos_ = math.cos(delta_theta)
         sin_ = math.sin(delta_theta)
         t = self.time_interval
-        if(robot_omega < 0.01 and robot_omega > -0.01):
-            return np.array([ [1.0, 0.0, 0.0, 1*t, 0.0], 
-                          [0.0, 1.0, 0.0, 0.0, 1*t], 
+        if(-0.01 < robot_omega < 0.01):
+            return np.array([ [2.0, 0.0, 0.0, 2*t, 0.0], 
+                              [0.0, 2.0, 0.0, 0.0, 2*t], 
+                              [0.0, 0.0, 1.0, 0.0, 0.0],
+                              [1.0/t, 0.0, 0.0, 1.0, 0.0],
+                              [0.0, 1.0/t, 0.0, 0.0, 1.0] ])
+        return np.array([ [2*cos_, 2*sin_, 0.0, 2*t*cos_, 2*t*sin_], 
+                          [-2*sin_, 2*cos_, 0.0, -2*t*sin_, 2*t*cos_], 
                           [0.0, 0.0, 1.0, 0.0, 0.0],
-                          [1.0, 0.0, 0.0, 1.0, 0.0],
-                          [0.0, 1.0, 0.0, 0.0, 1.0] ])
-        return np.array([ [cos_, sin_, 0.0, t*cos_, t*sin_], 
-                          [-sin_, cos_, 0.0, -t*sin_, t*cos_], 
-                          [0.0, 0.0, 1.0, 0.0, 0.0],
-                          [cos_, sin_, 0.0, cos_, sin_],
-                          [-sin_, cos_, 0.0, -sin_, cos_] ])
+                          [cos_/t, sin_/t, 0.0, cos_, sin_],
+                          [-sin_/t, cos_/t, 0.0, -sin_, cos_] ])
     
     def matA(self, xt, v, w):
         delta_theta = w*self.time_interval
@@ -138,17 +139,17 @@ class KalmanFilter():
         y = xt[1]
         vx = xt[3]
         vy = xt[4]
-        if(w < 0.01 and w > -0.01):
-            return np.array([[-t, 0.0],
+        if(-0.01 < w < 0.01):
+            return np.array([[2*t, 0.0],
+                             [0.0, 2*t],
                              [0.0, 0.0],
-                             [0.0, 0.0],
-                             [-1.0, 0.0],
-                             [0.0, 0.0] ])
-        return np.array([ [-sin_/w, -(x + vx*t)*t*sin_ + (y + vy*t)*t*cos_ + (v/w)*(sin_/w - t*cos_)], 
-                          [(1-cos_)/w, -(x + vx*t)*t*cos_ - (y + vy*t)*t*sin_ - (v/w)*(cos_/w + t*sin_)], 
+                             [1.0, 0.0],
+                             [0.0, 1.0] ])
+        return np.array([ [2*t*cos_, 2*t*sin_], 
+                          [-2*t*sin_, 2*t*cos_], 
                           [0.0, 0.0],
-                          [-1.0, -vx*t*sin_+vy*t*cos_],
-                          [0.0, -vx*t*cos_-vy*t*sin_] ])
+                          [cos_, sin_],
+                          [-sin_, cos_] ])
 
     """
     @fn motion_update()
@@ -156,15 +157,15 @@ class KalmanFilter():
     @param  
     """
     def motion_update(self, mean_t_1, cov_t_1, robot_vw):
-        # 入力による位置の変化f(x, y, z, x', y'), ノイズなし
-        self.belief.mean = self.fx(mean_t_1, robot_vw[0], robot_vw[1])
-        M = self.matM() # 入力のばらつき(x, yの速度のばらつき)
         F = self.matF(robot_vw[1]) # xがずれたときに移動後のxがどれだけずれるか
-        A = self.matA(self.belief.mean, robot_vw[0], robot_vw[1]) # 人への入力u(x, yの速度)がずれたとき、xがどれだけずれるか 
+        M = self.matM() # 入力のばらつき(x, yの速度のばらつき)
+        A = self.matA(mean_t_1, robot_vw[0], robot_vw[1]) # 人への入力u(x, yの速度)がずれたとき、xがどれだけずれるか 
+        # 入力による位置の変化f(x, y, sz, x', y'), ノイズなし
+        self.belief.mean = self.fx(mean_t_1, robot_vw[0], robot_vw[1])
         self.belief.cov = np.dot(F, np.dot(cov_t_1, F.T)) + np.dot(A, np.dot(M, A.T))
 
     def mat_h(self):
-        return np.array([ [1.0, 0.0, 0.0, self.time_interval, 0.0], [0.0, 1.0, 0.0, 0.0, self.time_interval], [0.0, 0.0, 1.0, 0.0, 0.0] ])
+        return np.array([ [1.0, 0.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0, 0.0] ])
 
     def matQ(self):
         return np.array([ [self.sigma_vx**2, 0.0, 0.0], [0.0, self.sigma_vy**2, 0.0], [0.0, 0.0, self.sigma_vz**2] ])
@@ -195,10 +196,14 @@ class KalmanFilter():
         self.belief.mean += np.dot(K, z_error)  # 平均値更新
         self.belief.cov = (I - K.dot(H)).dot(self.belief.cov) # 共分散更新
     
-    def main_loop(self, xt_1, zt_1, robot_vw, loop_rate):
+    # xt_1: 前回の推測された人の座標, zt_1: 観測値
+    def main_loop(self, zt_1, robot_vw, loop_rate):
         self.time_interval = loop_rate
+        if(self.time_interval>1.0): self.time_interval = 0.1
         # 現在の人の動きを前回推測した人の座標をもとに推測、平均と分散を求める
-        self.motion_update(self.belief.mean, self.belief.cov, robot_vw)
+        cov_t_1 = self.belief.cov
+        xt_1    = self.belief.mean
+        self.motion_update(xt_1, cov_t_1, robot_vw)
         # 観測方程式：カルマンゲインK、現在の座標をもとに観測値が妥当かどうか確認後、妥当であれば推測した位置を修正
         self.observation_update(zt_1, self.belief.mean, self.belief.cov)
         self.belief.mean[2] = zt_1[2]
@@ -207,6 +212,5 @@ class KalmanFilter():
     def estimation_nothing_human(self, robot_vw, loop_rate):
         self.time_interval = loop_rate
         # 人の次の位置を計算
-        self.belief.mean = self.human_state_transition(
-            self.belief.mean, robot_vw)
+        self.belief.mean = self.human_state_transition(self.belief.mean, robot_vw)
         return self.belief
