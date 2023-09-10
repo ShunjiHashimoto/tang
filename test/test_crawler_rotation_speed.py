@@ -55,10 +55,6 @@ class Motor:
     def calc_velocity(self, count, time):
         return length_of_1encoder*count/(time*1000)
 
-    def change_vel_to_duty(self, target_vel):
-        slope = (0.56 - 0.19) / (50 - 20) - 0.009 # 0.0123333
-        return 20 + (target_vel - 0.19) / slope
-
     def calculate_duty_cicle(self, duty):
         if duty > 90:
             print(f"over duty {duty}")
@@ -111,61 +107,82 @@ class Motor:
         pi.hardware_PWM(self.l_pwm_pin, freq, l_cnv_dutycycle)
         # 処理時間計測
         start_time = datetime.now()
-        dt = 0.1
+        dt = 0.001 # 0.0001がmax
         # プロット
         plt.figure()
         plt.xlabel("Time [s]")
-        plt.ylabel("Speed [m/s]")
-        plt.title("Target Velocity and Current Velocity")
-        plt.ylim(0, 0.5)
+        plt.ylabel(" ω[rad/s]")
+        plt.title("Target ω and Current ω")
+        plt.ylim(0, 15)
         time_data = []
         r_vel_data = []
         l_vel_data = []
         target_vel_data = []
-        distance_data = 0.0
+        last_time = datetime.now()
+        cnt = 0
+        prev_cnt_list = [0, 0]
+        w_target = 4
+        Kp = 1.5
+        Kd = 0.001
+        Ki = 0.01
+        Ke_l = 1.484813
+        Ke_r = 1.529544
+        radian_1encoder_r = 0.00306
+        radian_1encoder_l = 0.003095165176
+        error_sum_r = 0
+        error_sum_l = 0
         try:
-            while (self.cnt_list[0] <= 1600):
-                end_time = datetime.now()
-                elapsed_time = end_time - start_time
-                print(elapsed_time)
-                elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
-                time_data.append(elapsed_seconds)
-                
-                r_current_vel = self.calc_velocity(self.cnt_list[0], dt)
-                l_current_vel = self.calc_velocity(self.cnt_list[1], dt)
-                r_vel_data.append(r_current_vel)
-                l_vel_data.append(l_current_vel)
-                target_vel_data.append(target_vel)
-                # self.cnt_list[0] = 0
-                # self.cnt_list[1] = 0
-                # PID制御
-                # l_pid_output = pid_control(target_vel - l_current_vel, l_current_vel, dt)
-                # r_pid_output = pid_control(target_vel - r_current_vel, r_current_vel, dt)
-                print( '\033[31m'+'右車輪の速度: '+'\033[0m'+str(self.cnt_list[0]))
+            # 0 r, 1 l
+            while (self.cnt_list[1] <= 2030*2):
+                if(cnt == 10):
+                    # 0.01秒たった
+                    end_time = datetime.now()
+                    elapsed_time = end_time - start_time
+                    elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
+                    last_time = end_time
+                    print(elapsed_time)
+                    delta_encoder_r = self.cnt_list[0] - prev_cnt_list[0]
+                    delta_encoder_l = self.cnt_list[1] - prev_cnt_list[1]
+                    w_l = (delta_encoder_l*radian_1encoder_l)/(dt*10)
+                    w_r = (delta_encoder_r*radian_1encoder_r)/(dt*10)
+                    print("目標はw = 4")
+                    print( '\033[31m'+'現在の左と右車輪の速度: '+'\033[0m'+str(w_l)+' : '+str(w_r))
+                    prev_cnt_list[0] = self.cnt_list[0]
+                    prev_cnt_list[1] = self.cnt_list[1]
+                    cnt = 0
+
+                    error_w_l = Kp*(w_target - w_l) + Ki*(error_sum_l) + Kd*(w_target - w_l)/(dt*10)
+                    error_w_r =  Kp*(w_target - w_r) + Ki*(error_sum_r) + Kd*(w_target - w_r)/(dt*10)
+                    error_sum_l += (w_target - w_l)
+                    error_sum_r += (w_target - w_r)
+                    print(f"eroor_w_l, r {error_w_l}, {error_w_r}")
+                    duty_l = (100*Ke_l*(w_l+error_w_l))/12
+                    duty_r = (100*Ke_r*(w_r+error_w_r))/12
+                    print(f"duty={duty_l}, {duty_r}")
+                    target_vel_data.append(4.0)
+                    time_data.append(elapsed_seconds)
+                    r_vel_data.append(w_r)
+                    l_vel_data.append(w_l)
+                    if(duty_l>70 or duty_r>70 or duty_l < 0 or duty_r<0): continue
+
+                    # パラメータ変換
+                    l_cnv_dutycycle = self.calculate_duty_cicle(duty_l)
+                    r_cnv_dutycycle = self.calculate_duty_cicle(duty_l)
+                    # PWMを出力
+                    pi.hardware_PWM(self.r_pwm_pin, freq, r_cnv_dutycycle)
+                    pi.hardware_PWM(self.l_pwm_pin, freq, l_cnv_dutycycle)
+
+                # print( '\033[31m'+'右車輪の速度: '+'\033[0m'+str(self.cnt_list[0]))
                 print( '\033[32m'+'左車輪の速度: '+'\033[0m'+str(self.cnt_list[1]))
-                # # PWM制御
-                # l_pwm = change_vel_to_duty(l_pid_output)
-                # r_pwm = change_vel_to_duty(r_pid_output)
-                l_cnv_dutycycle = self.calculate_duty_cicle(20)
-                r_cnv_dutycycle = self.calculate_duty_cicle(20)
-                pi.1000000(self.r_pwm_pin, freq, r_cnv_dutycycle)
-                pi.hardware_PWM(self.l_pwm_pin, freq, l_cnv_dutycycle)
-                distance_data += dt*(l_current_vel + r_current_vel)/2
-                
                 time.sleep(dt)
+                cnt += 1
         finally:
-            # プロット
             plt.plot(time_data, target_vel_data, label="target")
-            plt.plot(time_data, r_vel_data, label="r_vel")
-            plt.plot(time_data, l_vel_data, label="l_vel")
+            plt.plot(time_data, r_vel_data, label="ω_r")
+            plt.plot(time_data, l_vel_data, label="ω_l")
             plt.legend()
             plt.grid(True)
             plt.savefig("speed.png")
-            print(time_data[len(time_data)-1])
-            # print(f"進んだ距離:{distance_data*1000}[mm]")
-            # print(f"目標距離:{round(target_vel*time_data[len(time_data)-1]*1000, 5)}[mm]")
-            # print(f"誤差距離:{round(target_vel*time_data[len(time_data)-1]*1000 - distance_data*1000, 5)}[mm]")
-            # print(f"誤差率:{(100*((target_vel*time_data[len(time_data)-1]*1000 - distance_data*1000)/(distance_data*1000)) )}[%]")
             pi.hardware_PWM(self.r_pwm_pin, freq, 0)
             pi.hardware_PWM(self.l_pwm_pin, freq, 0)
             pi.stop()
