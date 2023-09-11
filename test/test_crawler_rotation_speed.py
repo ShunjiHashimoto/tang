@@ -72,18 +72,20 @@ class Motor:
         delta_encoder_val = encoder_val - prev_encoder_val
         return (delta_encoder_val*Control.radian_1encoder_r)/dt
     
-    def pid_control(self, v_est, w_est, dt):
-        error_v  = Control.vel_target - v_est
-        error_w  = Control.w_target - w_est
+    def pid_control(self, v_curr, w_curr, dt):
+        error_v  = Control.v_target - v_curr
+        error_w  = Control.w_target - w_curr
         self.error_sum['v'] += error_v
         self.error_sum['w'] += error_w
         pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
         pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
+        self.prev_error['v'] = error_v
+        self.prev_error['w'] = error_w
         return pid_error_v, pid_error_w
     
-    def cal_duty(self, Ke, error_v, error_w):
-        w_r = (1/Control.wheel_radius)*(Control.vel_target+error_v) + (Control.tread_width/(2*Control.wheel_radius)*(Control.w_target + error_w))
-        w_l = (1/Control.wheel_radius)*(Control.vel_target+error_v) - (Control.tread_width/(2*Control.wheel_radius)*(Control.w_target + error_w))
+    def cal_duty(self, error_v, error_w):
+        w_r = (1/Control.wheel_r)*(Control.v_target + error_v) + (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + error_w))
+        w_l = (1/Control.wheel_r)*(Control.v_target + error_v) - (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + error_w))
         duty_r = (Control.Ke_r*w_r)/Control.input_v
         duty_l = (Control.Ke_l*w_l)/Control.input_v
         return duty_r, duty_l
@@ -113,34 +115,34 @@ class Motor:
                     elapsed_time = end_time - start_time
                     elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
                     # 角速度計算
-                    w_rs = self.calc_w(self.encoder_values['r'], self.prev_encoder_values['r'], dt)
-                    w_ls = self.calc_w(self.encoder_values['l'], self.prev_encoder_values['l'], dt)
-                    # 車体の角速度計算
-                    v_est = (w_rs*Control.wheel_radius + w_ls*Control.wheel_radius)/2
-                    w_est = (w_rs*Control.wheel_radius + w_ls*Control.wheel_radius)/Control.tread_width
+                    measured_w_r = self.calc_w(self.encoder_values['r'], self.prev_encoder_values['r'], dt)
+                    measured_w_l = self.calc_w(self.encoder_values['l'], self.prev_encoder_values['l'], dt)
+                    # 車体の速度、角速度計算
+                    v_est = (measured_w_r*Control.wheel_r + measured_w_l*Control.wheel_r)/2
+                    w_est = (measured_w_r*Control.wheel_r + measured_w_l*Control.wheel_r)/Control.tread_w
+                    # エンコーダ値保存
                     self.prev_encoder_values['r'] = self.encoder_values['r']
                     self.prev_encoder_values['l'] = self.encoder_values['l']
+                    # PID制御
                     pid_error_v, pid_error_w = self.pid_control(v_est, w_est, dt)
+                    v_curr = pid_error_v + v_est
+                    w_curr = pid_error_w + w_est
                     # duty計算
-                    duty_r, duty_l = self.cal_duty(Control.Ke_r, pid_error_v, pid_error_w)
+                    duty_r, duty_l = self.cal_duty(pid_error_v, pid_error_w)
                     if(duty_r > 70 or duty_l > 70 or duty_r < 0 or duty_l < 0): 
                         print(f"over duty: r={duty_r}, l={duty_l}")
                         continue
-                    self.prev_error['v'] = pid_error_v
-                    self.prev_error['w'] = pid_error_w
                     # PWM出力
                     self.pwm_control(Pin.pwm_r, duty_r)
                     self.pwm_control(Pin.pwm_l, duty_l)
                     # ログ
                     Fig.time_data.append(elapsed_seconds)
-                    Fig.target_vel_data.append(Control.vel_target)
-                    Fig.vel_data_r.append(pid_error_v + v_est)
-                    Fig.vel_data_l.append(pid_error_w + w_est)
+                    Fig.target_vel_data.append(Control.v_target)
+                    Fig.vel_data_r.append(v_curr)
+                    Fig.vel_data_l.append(w_curr)
                     print(f"目標角速度 w = {Control.w_target}")
-                    print( '\033[31m'+'現在の左と右車輪の速度: '+'\033[0m'+str(pid_error_v + v_est)+' : '+str(pid_error_w + w_est))
-                    # print(f"error w_l, r {error_w_l}, {error_w_r}")
-                    print(f"duty={duty_l}, {duty_r}")
-
+                    print( '\033[31m'+'現在の車体速度: '+'\033[0m'+ str(v_curr)+' 角速度: '+ str(w_curr))
+                    print(f"duty_r={duty_r}, duty_l={duty_r}")
                 # print( '\033[31m'+'右車輪の速度: '+'\033[0m'+str(self.encoder_values['r']))
                 print( '\033[32m'+'左車輪の速度: '+'\033[0m'+str(self.encoder_values['l']))
                 time.sleep(PID.dt)

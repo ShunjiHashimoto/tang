@@ -33,10 +33,15 @@ class Control:
     # 目標角速度
     w_target = 0.0001
     # 目標速度
-    vel_target = 1.0
+    v_target = 1.0
     # 逆起電圧定数
-    Ke_l = 1.4848
     Ke_r = 1.5295
+    Ke_l = 1.4848
+    # トルク定数
+    Kt_r = 0
+    Kt_l = 0
+    # 巻線抵抗
+    R = 0
     # エンコーダ値1あたりの回転角度[rad]
     radian_1encoder_r = 0.00306
     radian_1encoder_l = 0.003095
@@ -46,7 +51,8 @@ class Control:
     # モータの回転数
     rotation_num = 2
     # トレッド幅[m]
-    tread_width = 0.32
+    tread_w = 0.32
     # 車輪半径
-    wheel_radius = 0.06553/2
+    wheel_r = 0.06553/2
+
     
