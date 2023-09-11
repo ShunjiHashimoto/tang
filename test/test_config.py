@@ -12,8 +12,8 @@ class Pin:
     pwm_l        = 12
 
 class PID:
-    Kp = 1.5
-    Kd = 0.001
+    Kp = 1.2
+    Kd = 0.0001
     Ki = 0.01
     dt = 0.001 # 0.0001がmax
     
@@ -31,7 +31,9 @@ class Control:
     # 入力電圧
     input_v = 12
     # 目標角速度
-    w_target = 4
+    w_target = 0.0001
+    # 目標速度
+    vel_target = 1.0
     # 逆起電圧定数
     Ke_l = 1.4848
     Ke_r = 1.5295
@@ -43,4 +45,8 @@ class Control:
     encoder_1rotation_l = 2050
     # モータの回転数
     rotation_num = 2
+    # トレッド幅[m]
+    tread_width = 0.32
+    # 車輪半径
+    wheel_radius = 0.06553/2
     

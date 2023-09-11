@@ -17,8 +17,8 @@ class Motor:
         self.last_level_l = None
         self.encoder_values = {'r' : 0, 'l' : 0}
         self.prev_encoder_values = {'r' : 0, 'l' : 0}
-        self.prev_error_w = {'r' : 0, 'l' : 0}
-        self.error_sum = {'r' : 0, 'l' : 0}
+        self.prev_error = {'v' : 0, 'w' : 0}
+        self.error_sum = {'v' : 0, 'w' : 0}
         self.prev_time = time.time()
         self.set_gpio()
         # プロット
@@ -72,17 +72,21 @@ class Motor:
         delta_encoder_val = encoder_val - prev_encoder_val
         return (delta_encoder_val*Control.radian_1encoder_r)/dt
     
-    def pid_control(self, w_r, w_l, dt):
-        error_w_r  = Control.w_target - w_r
-        error_w_l  = Control.w_target - w_l
-        self.error_sum['r'] += error_w_r
-        self.error_sum['l'] += error_w_l
-        error_w_r = PID.Kp*error_w_r + PID.Ki*self.error_sum['r'] + PID.Kd*(error_w_r - self.prev_error_w['r'])/dt
-        error_w_l = PID.Kp*error_w_l + PID.Ki*self.error_sum['l'] + PID.Kd*(error_w_l - self.prev_error_w['l'])/dt
-        return error_w_r, error_w_l
+    def pid_control(self, v_est, w_est, dt):
+        error_v  = Control.vel_target - v_est
+        error_w  = Control.w_target - w_est
+        self.error_sum['v'] += error_v
+        self.error_sum['w'] += error_w
+        pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
+        pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
+        return pid_error_v, pid_error_w
     
-    def cal_duty(self, Ke, w, error_w):
-        return (100*Ke*(w + error_w))/Control.input_v
+    def cal_duty(self, Ke, error_v, error_w):
+        w_r = (1/Control.wheel_radius)*(Control.vel_target+error_v) + (Control.tread_width/(2*Control.wheel_radius)*(Control.w_target + error_w))
+        w_l = (1/Control.wheel_radius)*(Control.vel_target+error_v) - (Control.tread_width/(2*Control.wheel_radius)*(Control.w_target + error_w))
+        duty_r = (Control.Ke_r*w_r)/Control.input_v
+        duty_l = (Control.Ke_l*w_l)/Control.input_v
+        return duty_r, duty_l
     
     def pwm_control(self, pin, duty):
         cnv_dutycycle = self.calculate_duty_cycle(duty)
@@ -109,27 +113,32 @@ class Motor:
                     elapsed_time = end_time - start_time
                     elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
                     # 角速度計算
-                    w_r = self.calc_w(self.encoder_values['r'], self.prev_encoder_values['r'], dt)
-                    w_l = self.calc_w(self.encoder_values['l'], self.prev_encoder_values['l'], dt)
+                    w_rs = self.calc_w(self.encoder_values['r'], self.prev_encoder_values['r'], dt)
+                    w_ls = self.calc_w(self.encoder_values['l'], self.prev_encoder_values['l'], dt)
+                    # 車体の角速度計算
+                    v_est = (w_rs*Control.wheel_radius + w_ls*Control.wheel_radius)/2
+                    w_est = (w_rs*Control.wheel_radius + w_ls*Control.wheel_radius)/Control.tread_width
                     self.prev_encoder_values['r'] = self.encoder_values['r']
                     self.prev_encoder_values['l'] = self.encoder_values['l']
-                    error_w_r, error_w_l = self.pid_control(w_r, w_l, dt)
+                    pid_error_v, pid_error_w = self.pid_control(v_est, w_est, dt)
                     # duty計算
-                    duty_r = self.cal_duty(Control.Ke_r, w_r, error_w_r)
-                    duty_l = self.cal_duty(Control.Ke_l, w_l, error_w_l)
-                    self.prev_error_w['r'] = error_w_r
-                    self.prev_error_w['l'] = error_w_l
+                    duty_r, duty_l = self.cal_duty(Control.Ke_r, pid_error_v, pid_error_w)
+                    if(duty_r > 70 or duty_l > 70 or duty_r < 0 or duty_l < 0): 
+                        print(f"over duty: r={duty_r}, l={duty_l}")
+                        continue
+                    self.prev_error['v'] = pid_error_v
+                    self.prev_error['w'] = pid_error_w
                     # PWM出力
                     self.pwm_control(Pin.pwm_r, duty_r)
                     self.pwm_control(Pin.pwm_l, duty_l)
                     # ログ
-                    Fig.target_vel_data.append(Control.w_target)
                     Fig.time_data.append(elapsed_seconds)
-                    Fig.vel_data_r.append(w_r)
-                    Fig.vel_data_l.append(w_l)
+                    Fig.target_vel_data.append(Control.vel_target)
+                    Fig.vel_data_r.append(pid_error_v + v_est)
+                    Fig.vel_data_l.append(pid_error_w + w_est)
                     print(f"目標角速度 w = {Control.w_target}")
-                    print( '\033[31m'+'現在の左と右車輪の速度: '+'\033[0m'+str(w_l)+' : '+str(w_r))
-                    print(f"error w_l, r {error_w_l}, {error_w_r}")
+                    print( '\033[31m'+'現在の左と右車輪の速度: '+'\033[0m'+str(pid_error_v + v_est)+' : '+str(pid_error_w + w_est))
+                    # print(f"error w_l, r {error_w_l}, {error_w_r}")
                     print(f"duty={duty_l}, {duty_r}")
 
                 # print( '\033[31m'+'右車輪の速度: '+'\033[0m'+str(self.encoder_values['r']))
