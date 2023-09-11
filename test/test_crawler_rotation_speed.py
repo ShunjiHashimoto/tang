@@ -22,7 +22,6 @@ class Motor:
         self.prev_time = time.time()
         self.set_gpio()
         # プロット
-        plt.Figure()
         plt.xlabel("Time [s]")
         plt.ylabel(" ω[rad/s]")
         plt.title("Target ω and Current ω")
@@ -77,10 +76,10 @@ class Motor:
         error_w  = Control.w_target - w_curr
         self.error_sum['v'] += error_v
         self.error_sum['w'] += error_w
-        pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
-        pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
         self.prev_error['v'] = error_v
         self.prev_error['w'] = error_w
+        pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
+        pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
         return pid_error_v, pid_error_w
     
     def cal_duty(self, error_v, error_w):
@@ -129,7 +128,7 @@ class Motor:
                     w_curr = pid_error_w + w_est
                     # duty計算
                     duty_r, duty_l = self.cal_duty(pid_error_v, pid_error_w)
-                    if(duty_r > 70 or duty_l > 70 or duty_r < 0 or duty_l < 0): 
+                    if(duty_r > PWM.max_duty or duty_l > PWM.max_duty or duty_r < 0 or duty_l < 0): 
                         print(f"over duty: r={duty_r}, l={duty_l}")
                         continue
                     # PWM出力

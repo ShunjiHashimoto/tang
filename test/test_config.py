@@ -20,6 +20,7 @@ class PID:
 class PWM:
     # PWM周波数をHzで指定
     freq = 1000 # [Hz]
+    max_duty = 70
     
 class Fig:
     time_data  = []
