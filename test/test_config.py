@@ -38,15 +38,17 @@ class Control:
     # 目標加速度
     a_target = 1.0
     # 目標角加速度
-    alpah_target = 1.0
+    alpha_target = 1.0
     # 逆起電圧定数
-    Ke_r = 1.5295
-    Ke_l = 1.4848
+    Ke_r = 0.5905
+    Ke_l = 0.5905
+    # Ke_r = 1.5295
+    # Ke_l = 1.4848
     # トルク定数
-    Kt_r = 0
-    Kt_l = 0
+    Kt_r = 1.9
+    Kt_l = 1.9
     # 巻線抵抗
-    R = 0
+    R = 3.05931
     # エンコーダ値1あたりの回転角度[rad]
     radian_1encoder_r = 0.00306
     radian_1encoder_l = 0.003095
@@ -60,8 +62,7 @@ class Control:
     # 車輪半径
     wheel_r = 0.06553/2
     # 車体質量
-    M = 0.0
-    # 車体慣性
-    J = 0.0
-
-    
+    M = 20.0
+    # 車体慣性モーメント J = ml^2
+    # J = 1/3(a^2 + b^2) 44cm, 40cm = 0.58999
+    J = M*(0.22*0.22 + 0.2*0.2)/3
