@@ -35,6 +35,10 @@ class Control:
     w_target = 0.0001
     # 目標速度
     v_target = 1.0
+    # 目標加速度
+    a_target = 1.0
+    # 目標角加速度
+    alpah_target = 1.0
     # 逆起電圧定数
     Ke_r = 1.5295
     Ke_l = 1.4848
@@ -55,5 +59,9 @@ class Control:
     tread_w = 0.32
     # 車輪半径
     wheel_r = 0.06553/2
+    # 車体質量
+    M = 0.0
+    # 車体慣性
+    J = 0.0
 
     

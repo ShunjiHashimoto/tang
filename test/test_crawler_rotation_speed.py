@@ -82,11 +82,11 @@ class Motor:
         pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
         return pid_error_v, pid_error_w
     
-    def cal_duty(self, error_v, error_w):
-        w_r = (1/Control.wheel_r)*(Control.v_target + error_v) + (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + error_w))
-        w_l = (1/Control.wheel_r)*(Control.v_target + error_v) - (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + error_w))
-        duty_r = (Control.Ke_r*w_r)/Control.input_v
-        duty_l = (Control.Ke_l*w_l)/Control.input_v
+    def cal_duty(self, w_r, w_l, i_r, i_l):
+        e_r = Control.Ke_r*w_r + Control.R*i_r
+        e_l = Control.Ke_r*w_l + Control.R*i_l
+        duty_r = e_r/Control.input_v
+        duty_l = e_l/Control.input_v
         return duty_r, duty_l
     
     def pwm_control(self, pin, duty):
@@ -126,8 +126,17 @@ class Motor:
                     pid_error_v, pid_error_w = self.pid_control(v_est, w_est, dt)
                     v_curr = pid_error_v + v_est
                     w_curr = pid_error_w + w_est
+                    # 各モータの角速度
+                    w_r = (1/Control.wheel_r)*(Control.v_target + pid_error_v) + (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
+                    w_l = (1/Control.wheel_r)*(Control.v_target + pid_error_v) - (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
+                    # トルク計算
+                    T_r = (Control.wheel_r/2)*Control.M*Control.a_target + (Control.wheel_r/Control.tread_w)*Control.J*Control.alpah_target
+                    T_l = (Control.wheel_r/2)*Control.M*Control.a_target - (Control.wheel_r/Control.tread_w)*Control.J*Control.alpah_target
+                    # 電流計算
+                    i_r = T_r/Control.Kt_r
+                    i_l = T_l/Control.Kt_l
                     # duty計算
-                    duty_r, duty_l = self.cal_duty(pid_error_v, pid_error_w)
+                    duty_r, duty_l = self.cal_duty(w_r, w_l, i_r, i_l)
                     if(duty_r > PWM.max_duty or duty_l > PWM.max_duty or duty_r < 0 or duty_l < 0): 
                         print(f"over duty: r={duty_r}, l={duty_l}")
                         continue
