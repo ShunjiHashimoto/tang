@@ -12,9 +12,9 @@ class Pin:
     pwm_l        = 12
 
 class PID:
-    Kp = 1.2
-    Kd = 0.0001
+    Kp = 1.0
     Ki = 0.01
+    Kd = 0.0
     dt = 0.001 # 0.0001がmax
     
 class PWM:
@@ -24,21 +24,21 @@ class PWM:
     
 class Fig:
     time_data  = []
-    vel_data_r = []
-    vel_data_l = []
+    vel_data = []
+    w_data = []
     target_vel_data = []
 
 class Control:
     # 入力電圧
-    input_v = 12
+    input_v = 12.1
     # 目標角速度
     w_target = 0.0001
     # 目標速度
-    v_target = 1.0
+    v_target = 0.4
     # 目標加速度
-    a_target = 1.0
+    a_target = 0.001
     # 目標角加速度
-    alpha_target = 1.0
+    alpha_target = 0.0001
     # 逆起電圧定数
     Ke_r = 0.5905
     Ke_l = 0.5905
@@ -56,13 +56,13 @@ class Control:
     encoder_1rotation_r = 2030
     encoder_1rotation_l = 2050
     # モータの回転数
-    rotation_num = 2
+    rotation_num = 4
     # トレッド幅[m]
     tread_w = 0.32
-    # 車輪半径
-    wheel_r = 0.06553/2
+    # 車輪半径[m]
+    wheel_r = 0.1
     # 車体質量
-    M = 20.0
+    M = 24.6
     # 車体慣性モーメント J = ml^2
     # J = 1/3(a^2 + b^2) 44cm, 40cm = 0.58999
     J = M*(0.22*0.22 + 0.2*0.2)/3
