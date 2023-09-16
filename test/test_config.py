@@ -14,8 +14,8 @@ class Pin:
 class PID:
     Kp = 1.0
     Ki = 0.01
-    Kd = 0.0
-    dt = 0.001 # 0.0001がmax
+    Kd = 0.00
+    dt = 0.005 # 0.0001がmax
     
 class PWM:
     # PWM周波数をHzで指定
@@ -30,7 +30,7 @@ class Fig:
 
 class Control:
     # 入力電圧
-    input_v = 12.1
+    input_v = 11.8
     # 目標角速度
     w_target = 0.0001
     # 目標速度
@@ -56,7 +56,7 @@ class Control:
     encoder_1rotation_r = 2030
     encoder_1rotation_l = 2050
     # モータの回転数
-    rotation_num = 4
+    rotation_num = 2
     # トレッド幅[m]
     tread_w = 0.32
     # 車輪半径[m]

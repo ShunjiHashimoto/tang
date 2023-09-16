@@ -20,6 +20,7 @@ class Motor:
         self.prev_error = {'v' : 0, 'w' : 0}
         self.error_sum = {'v' : 0, 'w' : 0}
         self.prev_time = time.time()
+        self.prev_time_for_pwm = time.time()
         self.set_gpio()
         # プロット
         plt.xlabel("Time [s]")
@@ -74,22 +75,47 @@ class Motor:
     def pid_control(self, v_curr, w_curr, dt):
         error_v  = Control.v_target - v_curr
         error_w  = Control.w_target - w_curr
-        print(f"error_v: {error_v} w_curr: {w_curr}")
+        pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
+        pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
+        print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{Control.v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{(error_v - self.prev_error['v'])}\033[0m")
         self.error_sum['v'] += error_v
         self.error_sum['w'] += error_w
         self.prev_error['v'] = error_v
         self.prev_error['w'] = error_w
-        pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
-        pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
-        print(f"pid_error_v: {pid_error_v}, pid_error_w: {pid_error_w}")
         return pid_error_v, pid_error_w
     
+    def calc_target_w_i(self, v_target, w_target, a_target, alpha_target, dt):
+        # 角速度計算
+        measured_w_r = self.calc_w(self.encoder_values['r'], self.prev_encoder_values['r'], dt)
+        measured_w_l = self.calc_w(self.encoder_values['l'], self.prev_encoder_values['l'], dt)
+        # 車体の速度、角速度計算
+        v_est = (measured_w_r*Control.wheel_r + measured_w_l*Control.wheel_r)/2
+        w_est = (measured_w_r*Control.wheel_r - measured_w_l*Control.wheel_r)/Control.tread_w
+        # エンコーダ値保存
+        self.prev_encoder_values['r'] = self.encoder_values['r']
+        self.prev_encoder_values['l'] = self.encoder_values['l']
+        # PID制御
+        pid_error_v, pid_error_w = self.pid_control(v_est, w_est, dt)
+        print(f"\033[91m車体の推定目標速度: {v_est + pid_error_v}\033[0m")
+        # 各モータの角速度
+        w_r = (1/Control.wheel_r)*(v_est + pid_error_v) + (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
+        w_l = (1/Control.wheel_r)*(v_est + pid_error_v) - (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
+        # トルク計算
+        T_r = (Control.wheel_r/2)*Control.M*Control.a_target + (Control.wheel_r/Control.tread_w)*Control.J*Control.alpha_target
+        T_l = (Control.wheel_r/2)*Control.M*Control.a_target - (Control.wheel_r/Control.tread_w)*Control.J*Control.alpha_target
+        # 電流計算
+        i_r = T_r/Control.Kt_r
+        i_l = T_l/Control.Kt_l
+        print(f"\033[91m電流値 ir:{i_r}, il:{i_l}\033[0m")
+        # ログ
+        Fig.target_vel_data.append(Control.v_target)
+        Fig.vel_data.append(v_est)
+        Fig.w_data.append(w_est)
+        return w_r, w_l, i_r, i_l
+    
     def cal_duty(self, w_r, w_l, i_r, i_l):
-        print(f"Control.R*i_r: { Control.R*i_r},  Control.R*i_l: { Control.R*i_l}")
-        print(f"Control.Ke_r*w_r: {Control.Ke_r*w_r}, Control.Ke_l*w_l: {Control.Ke_l*w_l}")
         e_r = Control.Ke_r*w_r + Control.R*i_r
         e_l = Control.Ke_l*w_l + Control.R*i_l
-        print(f"e_r: {e_r}, e_l: {e_l}")
         duty_r = 100*e_r/Control.input_v
         duty_l = 100*e_l/Control.input_v
         return duty_r, duty_l
@@ -98,136 +124,63 @@ class Motor:
         cnv_dutycycle = self.calculate_duty_cycle(duty)
         self.pi.hardware_PWM(pin, PWM.freq, cnv_dutycycle)
         return
+    
+    def motor_control(self, w_r, w_l, i_r, i_l):
+        # duty計算
+        duty_r, duty_l = self.cal_duty(w_r, w_l, i_r, i_l)
+        if(duty_r > PWM.max_duty or duty_l > PWM.max_duty or duty_r < 0 or duty_l < 0):
+            print(f"over duty: r={duty_r}, l={duty_l}")
+            return
+        # PWM出力
+        self.pwm_control(Pin.pwm_r, duty_r)
+        self.pwm_control(Pin.pwm_l, duty_l)
+        return
         
-    def run(self):
-        # PWMパラメータ
-        target_vel = float(sys.argv[1])
-        initial_pwm = target_vel
-        # PWMを出力
-        self.pwm_control(Pin.pwm_r, initial_pwm)
-        self.pwm_control(Pin.pwm_l, initial_pwm)
+    def execute(self):
         # 処理時間計測
         start_time = datetime.now()
         self.prev_encoder_values['r'] = self.encoder_values['r']
         self.prev_encoder_values['l'] = self.encoder_values['l']
         try:
             while (self.encoder_values['l'] <= Control.encoder_1rotation_l*Control.rotation_num):
+                # 時間更新
                 current_time = time.time()
                 dt = current_time - self.prev_time
-                if(dt >= 0.01):
-                    # 処理時間計測
-                    self.prev_time = current_time
-                    end_time = datetime.now()
-                    elapsed_time = end_time - start_time
-                    elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
-                    # 角速度計算
-                    measured_w_r = self.calc_w(self.encoder_values['r'], self.prev_encoder_values['r'], dt)
-                    measured_w_l = self.calc_w(self.encoder_values['l'], self.prev_encoder_values['l'], dt)
-                    print(f"measured_w_r: {measured_w_r}, measured_w_l: {measured_w_l}")
-                    # 車体の速度、角速度計算
-                    v_est = (measured_w_r*Control.wheel_r + measured_w_l*Control.wheel_r)/2
-                    w_est = (measured_w_r*Control.wheel_r - measured_w_l*Control.wheel_r)/Control.tread_w
-                    # エンコーダ値保存
-                    self.prev_encoder_values['r'] = self.encoder_values['r']
-                    self.prev_encoder_values['l'] = self.encoder_values['l']
-                    # print(f"prev_encoder_values[r][l]: {self.prev_encoder_values['r']}, {self.prev_encoder_values['l']}")
-                    # PID制御
-                    pid_error_v, pid_error_w = self.pid_control(v_est, w_est, dt)
-                    # 各モータの角速度
-                    w_r = (1/Control.wheel_r)*(Control.v_target + pid_error_v) + (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
-                    w_l = (1/Control.wheel_r)*(Control.v_target + pid_error_v) - (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
-                    print(f"w_r: {w_r}, w_l: {w_l}")
-                    # トルク計算
-                    T_r = (Control.wheel_r/2)*Control.M*Control.a_target + (Control.wheel_r/Control.tread_w)*Control.J*Control.alpha_target
-                    T_l = (Control.wheel_r/2)*Control.M*Control.a_target - (Control.wheel_r/Control.tread_w)*Control.J*Control.alpha_target
-                    # 電流計算
-                    i_r = T_r/Control.Kt_r
-                    i_l = T_l/Control.Kt_l
-                    # print(f"i_r: {i_r}, i_l: {i_l}")
-                    # duty計算
-                    duty_r, duty_l = self.cal_duty(w_r, w_l, i_r, i_l)
-                    if(duty_r > PWM.max_duty or duty_l > PWM.max_duty or duty_r < 0 or duty_l < 0):
-                        print(f"over duty: r={duty_r}, l={duty_l}")
-                        continue
-                    # PWM出力
-                    self.pwm_control(Pin.pwm_r, duty_r)
-                    self.pwm_control(Pin.pwm_l, duty_l)
-                    # ログ
-                    Fig.time_data.append(elapsed_seconds)
-                    Fig.target_vel_data.append(Control.v_target)
-                    Fig.vel_data.append(v_est)
-                    # Fig.w_data.append(w_est)
-                    # print(f"目標角速度 v = {Control.v_target}")
-                    # print( '\033[31m'+'推定した車体速度: '+'\033[0m'+ str(v_est))
-                    # print(f"duty_r={duty_r}, duty_l={duty_l}")
-                # print( '\033[31m'+'右車輪の速度: '+'\033[0m'+str(self.encoder_values['r']))
-                # print( '\033[32m'+'左車輪の速度: '+'\033[0m'+str(self.encoder_values['l']))
+                self.prev_time = time.time()
+                # ログ
+                elapsed_time = datetime.now() - start_time
+                elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
+                Fig.time_data.append(elapsed_seconds)
+                # モータの目標角速度と電流値を計算
+                w_r, w_l, i_r, i_l= self.calc_target_w_i(Control.v_target, Control.w_target, Control.a_target, Control.alpha_target, dt)
+                # 0.01秒周期でモータに指令を送る
+                if(current_time - self.prev_time_for_pwm > 0.01):
+                    self.motor_control(w_r, w_l, i_r, i_l)
                 time.sleep(PID.dt)
-            # self.error_sum['v'] = 0
-            # self.error_sum['w'] = 0
             self.prev_error['v'] = 0
             self.prev_error['w'] = 0
-            Control.a_target  = -0.5
+            Control.a_target  = -0.001
             Control.v_target  = 0.2
-            self.prev_encoder_values['r'] = self.encoder_values['r']
-            self.prev_encoder_values['l'] = self.encoder_values['l']
             while (self.encoder_values['l'] <= Control.encoder_1rotation_l*8):
+                # 時間更新
                 current_time = time.time()
                 dt = current_time - self.prev_time
-                if(dt >= 0.01):
-                    print(f"dt: {dt}")
-                    # 処理時間計測
-                    self.prev_time = current_time
-                    end_time = datetime.now()
-                    elapsed_time = end_time - start_time
-                    elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
-                    # 角速度計算
-                    measured_w_r = self.calc_w(self.encoder_values['r'], self.prev_encoder_values['r'], dt)
-                    measured_w_l = self.calc_w(self.encoder_values['l'], self.prev_encoder_values['l'], dt)
-                    print(f"measured_w_r: {measured_w_r}, measured_w_l: {measured_w_l}")
-                    # 車体の速度、角速度計算
-                    v_est = (measured_w_r*Control.wheel_r + measured_w_l*Control.wheel_r)/2
-                    w_est = (measured_w_r*Control.wheel_r - measured_w_l*Control.wheel_r)/Control.tread_w
-                    # エンコーダ値保存
-                    self.prev_encoder_values['r'] = self.encoder_values['r']
-                    self.prev_encoder_values['l'] = self.encoder_values['l']
-                    print(f"prev_encoder_values[r][l]: {self.prev_encoder_values['r']}, {self.prev_encoder_values['l']}")
-                    # PID制御
-                    pid_error_v, pid_error_w = self.pid_control(v_est, w_est, dt)
-                    # 各モータの角速度
-                    w_r = (1/Control.wheel_r)*(v_est + pid_error_v) + (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
-                    w_l = (1/Control.wheel_r)*(v_est + pid_error_v) - (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
-                    print(f"w_r: {w_r}, w_l: {w_l}")
-                    # トルク計算
-                    T_r = (Control.wheel_r/2)*Control.M*Control.a_target + (Control.wheel_r/Control.tread_w)*Control.J*Control.alpha_target
-                    T_l = (Control.wheel_r/2)*Control.M*Control.a_target - (Control.wheel_r/Control.tread_w)*Control.J*Control.alpha_target
-                    # 電流計算
-                    i_r = abs(T_r/Control.Kt_r)
-                    i_l = abs(T_l/Control.Kt_l)
-                    print(f"i_r: {i_r}, i_l: {i_l}")
-                    # duty計算
-                    duty_r, duty_l = self.cal_duty(w_r, w_l, i_r, i_l)
-                    if(duty_r > PWM.max_duty or duty_l > PWM.max_duty or duty_r < 0 or duty_l < 0):
-                        print(f"over duty: r={duty_r}, l={duty_l}")
-                        continue
-                    # PWM出力
-                    self.pwm_control(Pin.pwm_r, duty_r)
-                    self.pwm_control(Pin.pwm_l, duty_l)
-                    # ログ
-                    Fig.time_data.append(elapsed_seconds)
-                    Fig.target_vel_data.append(Control.v_target)
-                    Fig.vel_data.append(v_est)
-                    # Fig.w_data.append(w_est)
-                    # print(f"目標角速度 v = {Control.v_target}")
-                    print( '\033[31m'+'推定した車体速度: '+'\033[0m'+ str(v_est))
-                    print(f"duty_r={duty_r}, duty_l={duty_l}")
-                # print( '\033[31m'+'右車輪の速度: '+'\033[0m'+str(self.encoder_values['r']))
-                # print( '\033[32m'+'左車輪の速度: '+'\033[0m'+str(self.encoder_values['l']))
+                self.prev_time = time.time()
+                # ログ
+                elapsed_time = datetime.now() - start_time
+                elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
+                Fig.time_data.append(elapsed_seconds)
+                # モータの目標角速度と電流値を計算
+                print("減速開始")
+                w_r, w_l, i_r, i_l= self.calc_target_w_i(Control.v_target, Control.w_target, Control.a_target, Control.alpha_target, dt)
+                # 0.01秒周期でモータに指令を送る
+                if(current_time - self.prev_time_for_pwm > 0.01):
+                    self.motor_control(w_r, w_l, i_r, i_l)
                 time.sleep(PID.dt)
         finally:
             plt.plot(Fig.time_data, Fig.target_vel_data, label="target")
             plt.plot(Fig.time_data, Fig.vel_data, label="v")
-            # plt.plot(Fig.time_data, Fig.w_data, label="ω")
+            plt.plot(Fig.time_data, Fig.w_data, label="ω")
             plt.legend()
             plt.grid(True)
             plt.savefig("speed.png")
@@ -237,7 +190,12 @@ class Motor:
 
 def main():
     motor = Motor()
-    motor.run()
+    motor.execute()
     
 if __name__ == "__main__":
     main()
+    
+# print("\033[91m赤色のテキスト\033[0m")
+# print("\033[92m緑色のテキスト\033[0m")
+# print("\033[93m黄色のテキスト\033[0m")
+# print("\033[94m青色のテキスト\033[0m")
