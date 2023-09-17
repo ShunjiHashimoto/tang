@@ -25,18 +25,26 @@
 
 ## SetUp
 ### 制御用PC - Raspberry Pi 4
-#### Install Ubuntu
+#### micro SDカードをUbuntu PCに接続する
+#### Raspberry Pi Imagerをインストール
+Raspberry PiにUbuntuを書き込むために、[Raspberry Pi Imager](https://www.raspberrypi.com/software/)を使用します。
+#### Ubuntu PCにRaspberry Piのイメージファイルをダウンロード
 Ubuntuが入ったPCでUbuntu serverをダウンロード
 ```bash
 $ wget http://cdimage.ubuntu.com/releases/bionic/release/ubuntu-18.04.5-preinstalled-server-arm64+raspi3.img.xz
 ```
 ファイルを解凍
 ```bash
-$ xz -dv ubuntu-18.04.5-preinstalled-server-arm64+raspi3.img.xz 
+$ xz -dv ubuntu-18.04.5-preinstalled-server-arm64+raspi3.img.xz
 ```
-Raspberry Pi Imagerを使って書き込む  
-![Screenshot from 2021-10-08 07-17-44](https://user-images.githubusercontent.com/63869336/136469821-0b4fd0a0-74e5-464a-93dd-b196089ea772.png)  
-書き込み後、Raspberry Piを起動し、xubuntuをinstallする
+#### Raspberry Pi Imagerを使って書き込む
+![Alt text](<Screenshot from 2023-09-17 00-54-33.png>)
+「OSを選ぶ」を選択し、上記のダウンロードしたイメージファイルを選択する  
+![Alt text](<Screenshot from 2023-09-17 00-57-45.png>)  
+ストレージはUbuntuに接続してあるSDカードを選択する  
+
+#### Xubuntuをインストール
+Raspberry Piを起動し、xubuntuをinstallする
 ```bash
 $ sudo apt update
 $ sudo apt upgrade
