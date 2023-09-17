@@ -3,10 +3,8 @@
 import rospy
 import time
 import serial
-import spidev
 import RPi.GPIO as GPIO
 import pigpio
-import lcd_display
 from config import Pin, PID, PWM, HumanFollowParam
 # ros
 from sensor_msgs.msg import Joy
@@ -26,16 +24,6 @@ GPIO.output(Pin.l_direction, GPIO.HIGH)
 GPIO.setup(Pin.teleop_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(Pin.follow_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-# spi settings
-spi = spidev.SpiDev()
-spi.open(0,0)
-spi.max_speed_hz = 100000 
-
-# atomlite setting
-usb_device = serial.Serial('/dev/ttyUSB0', '115200', timeout=1.0)
-atom_command = 'hearton'
-usb_device.write(atom_command.encode())
-
 class TangController():
     def __init__(self):
         # HumanInfo.msg
@@ -44,13 +32,11 @@ class TangController():
         # Modechange.msg
         self.current_mode = Modechange()
         self.current_mode.realsense_depth_thresh = 4.0
-        self.main = 0
+        self.main = 1
         self.ref_pos = 0.0
         self.speed = rospy.get_param("/tang_control/speed")
         self.prev_command = 0
         self.command_pwm = 0
-        # LCD Display
-        self.mylcd = lcd_display.lcd()
 
         GPIO.add_event_detect(Pin.teleop_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
         GPIO.add_event_detect(Pin.follow_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
@@ -63,23 +49,14 @@ class TangController():
         # publisher, モードと距離の閾値、赤色検出の閾値をpub
         self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
     
-    def read_analog_pin(self, channel):
-        adc = spi.xfer2([1, (8 + channel)<<4, 0])
-        data = ((adc[1]&3) << 8) + adc[2]
-        return data
-    
     def switch_on_callback(self, gpio):
         result = GPIO.input(gpio) # ピンの値を読み取る(HIGH or LOWの1 or 0)
-        atom_command = ''
         if(gpio == Pin.teleop_mode and result == 0): 
             self.main = 0
-            atom_command = 'manual'
             print("Manual",gpio)
         if(gpio == Pin.follow_mode and result == 0): 
             self.main = 1
-            atom_command = 'human'
             print("-------------------------Human",gpio)
-        usb_device.write(atom_command.encode())
         self.current_mode.mode = self.main
         self.mode_pub.publish(self.current_mode)
         return
@@ -96,22 +73,6 @@ class TangController():
     def dismiss_callback(self, msg):
         self.is_dismiss = msg
         return
-
-    def change_velocity(self, cnt):
-        if(self.speed == 90):
-            self.speed = 30
-            cnt = 0
-            return cnt
-        swt_val = self.read_analog_pin(Pin.swt_channel)
-        if(swt_val > 1010):
-            cnt += 1
-            if(cnt > 30):
-                self.speed += 10
-                self.mylcd.lcd_display_string("Speed: " + str(self.speed), 2)
-                cnt = 0
-        else:
-            cnt = 0
-        return cnt
     
     def nomarilze_speed(self, motor_r, motor_l):
         if(motor_r >= 100): motor_r = 100
@@ -142,8 +103,9 @@ class TangController():
 
     def manual_control(self):
         # Read the joystick position data
-        vrx_pos = (self.read_analog_pin(Pin.vrx_channel) -515)/8
-        vry_pos = -(self.read_analog_pin(Pin.vry_channel ) -515)/8
+        # TODO: コントローラからの指令値を代入する
+        vrx_pos = 0.0
+        vry_pos = 0.0
         # Read switch 
         print("X_flat : {}  Y_verti : {} ".format(vrx_pos, vry_pos))
         motor_r = 0
@@ -200,12 +162,12 @@ class TangController():
             motor_r -= self.command_pwm/10
             motor_r = motor_r*1.1
             motor_l += self.command_pwm 
-            # rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
+            rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
         elif (self.command_pwm >= 0): # 左回り
             motor_l += self.command_pwm/10
             motor_l = motor_l*1.1
             motor_r -= self.command_pwm
-            # rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
+            rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
         self.send_vel_cmd(motor_r, motor_l)
         return
     
@@ -220,11 +182,7 @@ def main():
     rospy.init_node("tang_control", anonymous=True)
     rate = rospy.Rate(10)
     tang_controller = TangController()
-    cnt = 0
-    tang_controller.mylcd.lcd_display_string("Start Control", 1)
-    tang_controller.mylcd.lcd_display_string("Speed: " + str(tang_controller.speed), 2)
     while not rospy.is_shutdown():
-        cnt = tang_controller.change_velocity(cnt)
         tang_controller.change_control_mode()
         rate.sleep()
     tang_controller.send_vel_cmd(0, 0)
@@ -232,7 +190,5 @@ def main():
                 
 if __name__ == '__main__':
     main()
-    atom_command = 'heartoff'
-    usb_device.write(atom_command.encode())
     GPIO.cleanup(Pin.teleop_mode)
     GPIO.cleanup(Pin.follow_mode)
