@@ -31,7 +31,7 @@ class DetectRed():
         self.all_time = 0
         self.count = 0
 
-    def maskCalc(self, hsv):
+    def calc_mask(self, hsv):
         # 赤色のHSVの値域1
         hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
         hsv_max = np.array([6,255,255])
@@ -44,7 +44,7 @@ class DetectRed():
         return(mask1 + mask2)
 
     # ブロブ解析
-    def analysisBlob(self, binary_img):
+    def analysis_blob(self, binary_img):
         # 2値画像のラベリング処理
         # labelは画像のラベリング結果を保持している二次元配列
         label = cv2.connectedComponentsWithStats(binary_img)
@@ -70,7 +70,7 @@ class DetectRed():
         maxblob["center"] = center[max_index]  # 中心座標
         return maxblob
 
-    def detectRed(self):
+    def detect_red(self):
         r = rospy.Rate(10)
         human_info = HumanInfo()
         while not rospy.is_shutdown():
@@ -83,7 +83,7 @@ class DetectRed():
             start = time.time()
 
             hsv = cv2.cvtColor(red_img, cv2.COLOR_BGR2HSV)
-            mask = self.maskCalc(hsv)
+            mask = self.calc_mask(hsv)
             # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
             h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
             # S, Vを2値化（大津の手法）
@@ -96,7 +96,7 @@ class DetectRed():
             h[(s == 0) | (v == 0)] = 100
 
             # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
-            target = self.analysisBlob(mask)
+            target = self.analysis_blob(mask)
             if(target == {}): continue
             if(target["area"] < min_area): continue
 
@@ -129,7 +129,7 @@ class DetectRed():
 
 if __name__ == "__main__":
     detect_red = DetectRed()
-    detect_red.detectRed()
+    detect_red.detect_red()
     rospy.spin()
     detect_red.video.release()
     cv2.destroyWindow(window_name)

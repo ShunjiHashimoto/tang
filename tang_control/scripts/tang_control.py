@@ -5,7 +5,8 @@ import time
 import serial
 import RPi.GPIO as GPIO
 import pigpio
-from config import Pin, PID, PWM, HumanFollowParam
+from config import Pin, PID, PWM, HumanFollowParam, FOLLOWPID
+from motor import Motor
 # ros
 from sensor_msgs.msg import Joy
 from tang_msgs.msg import HumanInfo, IsDismiss
@@ -15,12 +16,6 @@ from geometry_msgs.msg import Twist
 # modeを選択
 GPIO.setmode(GPIO.BCM)
 pi = pigpio.pi()
-
-# 回転方向のGPIOピン
-GPIO.setup(Pin.r_direction, GPIO.OUT)
-GPIO.setup(Pin.l_direction, GPIO.OUT)
-GPIO.output(Pin.r_direction, GPIO.HIGH)
-GPIO.output(Pin.l_direction, GPIO.HIGH)
 # モードのGPIOピン
 GPIO.setup(Pin.teleop_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(Pin.follow_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -31,12 +26,13 @@ class TangController():
         self.human_info = HumanInfo()
         self.cmdvel_from_imu = Twist()
         self.main = 0
-        self.ref_pos = 0.0
+        self.ref_pos = 150
         self.speed = rospy.get_param("/tang_control/speed")
         self.prev_command = 0
-        self.command_pwm = 0
         # teleop control
         self.tang_teleop = TangTeleop()
+        # motor
+        self.motor = Motor()
 
         GPIO.add_event_detect(Pin.teleop_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
         GPIO.add_event_detect(Pin.follow_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
@@ -82,7 +78,7 @@ class TangController():
         @fn p_control()
         @details P制御
         """
-        current_command = PID.p_gain * (self.ref_pos - cur_pos) + PID.d_gain*((self.ref_pos - cur_pos) - self.prev_command)/PID.dt
+        current_command = FOLLOWPID.p_gain * (self.ref_pos - cur_pos) + FOLLOWPID.d_gain*((self.ref_pos - cur_pos) - self.prev_command)/FOLLOWPID.dt
         self.prev_command = self.ref_pos - cur_pos
         #print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
         return current_command
@@ -92,17 +88,19 @@ class TangController():
         r_duty, l_duty = self.nomarilze_speed(r_duty, l_duty)
         r_cnv_dutycycle = int((r_duty * 1000000 / 100))
         l_cnv_dutycycle = int((l_duty * 1000000 / 100))
-        pi.hardware_PWM(Pin.r_pwm, PWM.freq, r_cnv_dutycycle)
-        pi.hardware_PWM(Pin.l_pwm, PWM.freq, l_cnv_dutycycle)
+        pi.hardware_PWM(Pin.pwm_r, PWM.freq, r_cnv_dutycycle)
+        pi.hardware_PWM(Pin.pwm_l, PWM.freq, l_cnv_dutycycle)
         # rospy.loginfo("r_duty : %d | l_duty: %d", r_duty, l_duty)
         return
-
+    
+    # Joystick操作を使ってモータ制御
     def teleop_control(self):
         motor_l, motor_r = self.tang_teleop.teleop()
         rospy.loginfo(f"motor_l: {motor_l}, motor_r: {motor_r}")
         self.send_vel_cmd(motor_r, motor_l)
         return
-        
+    
+    # 色検出を使ってモータ制御
     def follow_control(self):
         # 速度を距離に従って減衰させる、1m20cm以内で減衰開始する
         if self.is_dismiss.flag: 
@@ -112,30 +110,14 @@ class TangController():
             command_depth = 1.0
         else:
             command_depth = self.human_info.human_point.x / 2.0
-        motor_r = self.speed * command_depth
-        motor_l = self.speed * command_depth
         # コマンドの制御量を比例制御で決める
-        self.command_pwm = self.p_control(self.human_info.human_point.y)
-        if (abs(self.command_pwm) > motor_r and self.command_pwm < 0.0):
-            self.command_pwm = -self.speed * command_depth
-        elif (abs(self.command_pwm) > motor_r and self.command_pwm > 0.0):
-            self.command_pwm = self.speed * command_depth
-        # 80cm以内であれば止まる
-        if self.human_info.human_point.x <= HumanFollowParam.depth_min_thresh and self.human_info.human_point.x > 0.0:
-            rospy.logwarn("Stop: %lf", self.human_info.human_point.x)
-            motor_r = 0
-            motor_l = 0
-        elif (self.command_pwm < 0): # 右回り
-            motor_r -= self.command_pwm/10
-            motor_r = motor_r*1.1
-            motor_l += self.command_pwm 
-            rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
-        elif (self.command_pwm >= 0): # 左回り
-            motor_l += self.command_pwm/10
-            motor_l = motor_l*1.1
-            motor_r -= self.command_pwm
-            rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
-        self.send_vel_cmd(motor_r, motor_l)
+        print(f"self.human_info.human_point.y: {self.human_info.human_point.y}, {self.human_info.human_point.x}")
+        # TODO: diffに応じて車体の速度と角速度を決める
+        diff_x = self.p_control(self.human_info.human_point.x)
+        w_target = diff_x*0.001
+        v_target = 0.4
+        print(f"diff_x: {diff_x}")
+        self.motor.run(v_target, w_target, a_target = 0.001, alpha_target = 0.0001)
         return
     
     def change_control_mode(self):
