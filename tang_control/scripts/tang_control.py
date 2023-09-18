@@ -9,6 +9,7 @@ from config import Pin, PID, PWM, HumanFollowParam
 # ros
 from sensor_msgs.msg import Joy
 from tang_msgs.msg import HumanInfo, Modechange, IsDismiss
+from tang_teleop.scripts.tang_teleop import TangTeleop
 from geometry_msgs.msg import Twist
 
 # modeを選択
@@ -32,11 +33,13 @@ class TangController():
         # Modechange.msg
         self.current_mode = Modechange()
         self.current_mode.realsense_depth_thresh = 4.0
-        self.main = 1
+        self.main = 0
         self.ref_pos = 0.0
         self.speed = rospy.get_param("/tang_control/speed")
         self.prev_command = 0
         self.command_pwm = 0
+        # teleop control
+        self.tang_teleop = TangTeleop()
 
         GPIO.add_event_detect(Pin.teleop_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
         GPIO.add_event_detect(Pin.follow_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
@@ -52,10 +55,10 @@ class TangController():
     def switch_on_callback(self, gpio):
         result = GPIO.input(gpio) # ピンの値を読み取る(HIGH or LOWの1 or 0)
         if(gpio == Pin.teleop_mode and result == 0): 
-            self.main = 0
+            self.tang_teleop.main = 0
             print("Manual",gpio)
         if(gpio == Pin.follow_mode and result == 0): 
-            self.main = 1
+            self.tang_teleop.main = 1
             print("-------------------------Human",gpio)
         self.current_mode.mode = self.main
         self.mode_pub.publish(self.current_mode)
@@ -101,41 +104,12 @@ class TangController():
         # rospy.loginfo("r_duty : %d | l_duty: %d", r_duty, l_duty)
         return
 
-    def manual_control(self):
-        # Read the joystick position data
-        # TODO: コントローラからの指令値を代入する
-        vrx_pos = 0.0
-        vry_pos = 0.0
-        # Read switch 
-        print("X_flat : {}  Y_verti : {} ".format(vrx_pos, vry_pos))
-        motor_r = 0
-        motor_l = 0
-        # 前進
-        if(vry_pos > 1.0):
-            # 左旋回
-            if(vrx_pos < -1.0):
-                motor_r = vry_pos
-                motor_l = vry_pos + vrx_pos
-            # 右旋回
-            else:
-                motor_r = vry_pos - vrx_pos
-                motor_l = vry_pos 
-            if(motor_l < 0): motor_l = 0
-            if(motor_r < 0): motor_r = 0
-        elif(vry_pos < -1.0):
-            if(vrx_pos < -1.0):
-                motor_r = -vry_pos - vrx_pos
-                motor_l = -vry_pos 
-            else:
-                motor_r = -vry_pos 
-                motor_l = -vry_pos + vrx_pos
-            if(motor_l < 0): motor_l = 0
-            if(motor_r < 0): motor_r = 0
-        else:    
-            print("Nothing") 
+    def teleop_control(self):
+        motor_l, motor_r = self.tang_teleop.teleop()
+        rospy.loginfo(f"motor_l: {motor_l}, motor_r: {motor_r}")
         self.send_vel_cmd(motor_r, motor_l)
         return
-
+        
     def follow_control(self):
         # 速度を距離に従って減衰させる、1m20cm以内で減衰開始する
         if self.is_dismiss.flag: 
@@ -172,9 +146,9 @@ class TangController():
         return
     
     def change_control_mode(self):
-        if self.main == 0:
-            self.manual_control()
-        elif self.main == 1:
+        if self.tang_teleop.main == 0:
+            self.teleop_control()
+        elif self.tang_teleop.main == 1:
             self.follow_control()
         return 
             
