@@ -8,7 +8,7 @@ import pigpio
 from config import Pin, PID, PWM, HumanFollowParam
 # ros
 from sensor_msgs.msg import Joy
-from tang_msgs.msg import HumanInfo, Modechange, IsDismiss
+from tang_msgs.msg import HumanInfo, IsDismiss
 from tang_teleop.scripts.tang_teleop import TangTeleop
 from geometry_msgs.msg import Twist
 
@@ -30,9 +30,6 @@ class TangController():
         # HumanInfo.msg
         self.human_info = HumanInfo()
         self.cmdvel_from_imu = Twist()
-        # Modechange.msg
-        self.current_mode = Modechange()
-        self.current_mode.realsense_depth_thresh = 4.0
         self.main = 0
         self.ref_pos = 0.0
         self.speed = rospy.get_param("/tang_control/speed")
@@ -49,8 +46,6 @@ class TangController():
         self.imu_sub = rospy.Subscriber('cmdvel_from_imu', Twist, self.imu_callback, queue_size=1)
         self.is_dismiss_sub = rospy.Subscriber('is_dismiss', IsDismiss, self.dismiss_callback, queue_size=1)
         self.is_dismiss = IsDismiss()
-        # publisher, モードと距離の閾値、赤色検出の閾値をpub
-        self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
     
     def switch_on_callback(self, gpio):
         result = GPIO.input(gpio) # ピンの値を読み取る(HIGH or LOWの1 or 0)
@@ -59,9 +54,7 @@ class TangController():
             print("Manual",gpio)
         if(gpio == Pin.follow_mode and result == 0): 
             self.tang_teleop.main = 1
-            print("-------------------------Human",gpio)
-        self.current_mode.mode = self.main
-        self.mode_pub.publish(self.current_mode)
+            print("--Human",gpio)
         return
 
     def cmd_callback(self, msg):
