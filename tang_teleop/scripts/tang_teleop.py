@@ -2,10 +2,8 @@
 # -*- coding: utf-8 -*-
 import rospy
 import time
-from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
 
-# y = button[3], a = button[0]
 class TangTeleop():
     def __init__(self):
         self.btn = 0

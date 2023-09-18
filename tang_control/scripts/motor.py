@@ -73,12 +73,12 @@ class Motor:
         delta_encoder_val = encoder_val - prev_encoder_val
         return (delta_encoder_val*Control.radian_1encoder_r)/dt
     
-    def pid_control(self, v_curr, w_curr, dt):
-        error_v  = Control.v_target - v_curr
-        error_w  = Control.w_target - w_curr
+    def pid_control(self, v_curr, w_curr, v_target, w_target, dt):
+        error_v  = v_target - v_curr
+        error_w  = w_target - w_curr
         pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
         pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
-        print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{Control.v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{(error_v - self.prev_error['v'])}\033[0m")
+        print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{(error_v - self.prev_error['v'])}\033[0m")
         self.error_sum['v'] += error_v
         self.error_sum['w'] += error_w
         self.prev_error['v'] = error_v
@@ -96,20 +96,20 @@ class Motor:
         self.prev_encoder_values['r'] = self.encoder_values['r']
         self.prev_encoder_values['l'] = self.encoder_values['l']
         # PID制御
-        pid_error_v, pid_error_w = self.pid_control(v_est, w_est, dt)
+        pid_error_v, pid_error_w = self.pid_control(v_est, w_est,v_target, w_target,  dt)
         print(f"\033[91m車体の推定目標速度: {v_est + pid_error_v}\033[0m")
         # 各モータの角速度
         w_r = (1/Control.wheel_r)*(v_est + pid_error_v) + (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
         w_l = (1/Control.wheel_r)*(v_est + pid_error_v) - (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
         # トルク計算
-        T_r = (Control.wheel_r/2)*Control.M*Control.a_target + (Control.wheel_r/Control.tread_w)*Control.J*Control.alpha_target
-        T_l = (Control.wheel_r/2)*Control.M*Control.a_target - (Control.wheel_r/Control.tread_w)*Control.J*Control.alpha_target
+        T_r = (Control.wheel_r/2)*Control.M*a_target + (Control.wheel_r/Control.tread_w)*Control.J*alpha_target
+        T_l = (Control.wheel_r/2)*Control.M*a_target - (Control.wheel_r/Control.tread_w)*Control.J*alpha_target
         # 電流計算
         i_r = T_r/Control.Kt_r
         i_l = T_l/Control.Kt_l
         print(f"\033[91m電流値 ir:{i_r}, il:{i_l}\033[0m")
         # ログ
-        Fig.target_vel_data.append(Control.v_target)
+        Fig.target_vel_data.append(v_target)
         Fig.vel_data.append(v_est)
         Fig.w_data.append(w_est)
         return w_r, w_l, i_r, i_l
@@ -138,10 +138,6 @@ class Motor:
         return
         
     def run(self, v_target, w_target, a_target, alpha_target):
-        Control.v_target = v_target
-        Control.w_target = w_target
-        Control.a_target = a_target
-        Control.alpha_target = alpha_target
         # 時間更新
         current_time = time.time()
         dt = current_time - self.prev_time
@@ -150,14 +146,15 @@ class Motor:
         elapsed_time = datetime.now() - self.start_time
         elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
         Fig.time_data.append(elapsed_seconds)
+        # TODO: 任意の指令値に変更する
         # モータの目標角速度と電流値を計算
         w_r, w_l, i_r, i_l= self.calc_target_w_i(Control.v_target, Control.w_target, Control.a_target, Control.alpha_target, dt)
         # 0.01秒周期でモータに指令を送る
-        if(current_time - self.prev_time_for_pwm > 0.01):
+        if(current_time - dt > 0.01):
             self.motor_control(w_r, w_l, i_r, i_l)
         time.sleep(PID.dt)            
         
-    def stop():
+    def stop(self):
         plt.plot(Fig.time_data, Fig.target_vel_data, label="target")
         plt.plot(Fig.time_data, Fig.vel_data, label="v")
         plt.plot(Fig.time_data, Fig.w_data, label="ω")
