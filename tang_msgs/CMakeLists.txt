@@ -20,7 +20,6 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   HumanInfo.msg
-  Modechange.msg
   DetectionResult.msg
   IsDismiss.msg
 )

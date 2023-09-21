@@ -15,7 +15,7 @@ from geometry_msgs.msg import Twist
 
 # modeを選択
 GPIO.setmode(GPIO.BCM)
-pi = pigpio.pi()
+# pi = pigpio.pi()
 # モードのGPIOピン
 GPIO.setup(Pin.teleop_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 GPIO.setup(Pin.follow_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -88,14 +88,18 @@ class TangController():
         r_duty, l_duty = self.nomarilze_speed(r_duty, l_duty)
         r_cnv_dutycycle = int((r_duty * 1000000 / 100))
         l_cnv_dutycycle = int((l_duty * 1000000 / 100))
-        pi.hardware_PWM(Pin.pwm_r, PWM.freq, r_cnv_dutycycle)
-        pi.hardware_PWM(Pin.pwm_l, PWM.freq, l_cnv_dutycycle)
+        self.motor.pi.hardware_PWM(Pin.pwm_r, PWM.freq, r_cnv_dutycycle)
+        self.motor.pi.hardware_PWM(Pin.pwm_l, PWM.freq, l_cnv_dutycycle)
         # rospy.loginfo("r_duty : %d | l_duty: %d", r_duty, l_duty)
         return
     
     # Joystick操作を使ってモータ制御
     def teleop_control(self):
         motor_l, motor_r = self.tang_teleop.teleop()
+        if motor_l >= 0: self.motor.pi.write(Pin.direction_l, pigpio.HIGH)
+        if motor_r >= 0: self.motor.pi.write(Pin.direction_r, pigpio.HIGH)
+        if motor_l < 0: self.motor.pi.write(Pin.direction_l, pigpio.LOW)
+        if motor_r < 0: self.motor.pi.write(Pin.direction_r, pigpio.LOW)
         rospy.loginfo(f"motor_l: {motor_l}, motor_r: {motor_r}")
         self.send_vel_cmd(motor_r, motor_l)
         return

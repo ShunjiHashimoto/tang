@@ -10,7 +10,7 @@ import time
 import cv2
 # ros
 import rospy
-from tang_msgs.msg import HumanInfo, Modechange, IsDismiss
+from tang_msgs.msg import HumanInfo, IsDismiss
 
 window_name = 'red detection'
 min_area = 300

@@ -25,27 +25,8 @@ class TangTeleop():
             self.joy_r = 0
         if(self.joy_l == -0):
             self.joy_l = 0
-
         motor_l = self.joy_l
-        motor_r = self.joy_l
-        max = self.percent
-        ## 右回り
-        if(self.joy_r < 0):
-            if(self.joy_l > 0):
-                motor_r  += (self.joy_l * self.joy_r)/max
-            else:
-                motor_r -= self.joy_r
-        ## 左回り
-        elif(self.joy_r > 0):
-            if(self.joy_l > 0):
-                motor_l -= (self.joy_r * self.joy_l) / max 
-            else:
-                motor_l += self.joy_r 
-        else:
-            motor_l = self.joy_l
-            motor_r = self.joy_l
-
-        time.sleep(0.1)
+        motor_r = self.joy_r
         return motor_l, motor_r
         
     def joyCallback(self, joy_msg):
@@ -53,7 +34,7 @@ class TangTeleop():
         
         if(joy_msg.buttons[6]):
             newbtn |= self.BTN_BACK
-        elif(joy_msg.buttons[0]):
+        elif(joy_msg.buttons[1]):
             newbtn |= self.BTN_A
         elif(joy_msg.buttons[3]):
             newbtn |= self.BTN_Y
