@@ -75,9 +75,11 @@ class Motor:
     def pid_control(self, v_curr, w_curr, dt):
         error_v  = Control.v_target - v_curr
         error_w  = Control.w_target - w_curr
+        if(error_v < 0): error_v = error_v/3
         pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
         pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
-        print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{Control.v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{(error_v - self.prev_error['v'])}\033[0m")
+        print(f"\033[91mpid_error_v: {pid_error_v:.3f}, PID.Kp*error_v：{PID.Kp*error_v}, PID.Ki*self.error_sum['v']：{PID.Ki*self.error_sum['v']}, PID.Kd*(error_v - self.prev_error['v'])/dt：{PID.Kd*(error_v - self.prev_error['v'])/dt:.3f}\033[0m")
+        # print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{Control.v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{PID.Kd*(error_w - self.prev_error['w'])/dt:.3f}\033[0m")
         self.error_sum['v'] += error_v
         self.error_sum['w'] += error_w
         self.prev_error['v'] = error_v
@@ -106,11 +108,10 @@ class Motor:
         # 電流計算
         i_r = T_r/Control.Kt_r
         i_l = T_l/Control.Kt_l
-        print(f"\033[91m電流値 ir:{i_r}, il:{i_l}\033[0m")
         # ログ
         Fig.target_vel_data.append(Control.v_target)
-        Fig.vel_data.append(v_est)
-        Fig.w_data.append(w_est)
+        Fig.vel_data.append(pid_error_v)
+        Fig.w_data.append(v_est)
         return w_r, w_l, i_r, i_l
     
     def cal_duty(self, w_r, w_l, i_r, i_l):
@@ -160,7 +161,7 @@ class Motor:
             self.prev_error['v'] = 0
             self.prev_error['w'] = 0
             Control.a_target  = -0.001
-            Control.v_target  = 0.2
+            Control.v_target  = 0.0
             while (self.encoder_values['l'] <= Control.encoder_1rotation_l*8):
                 # 時間更新
                 current_time = time.time()
@@ -179,8 +180,8 @@ class Motor:
                 time.sleep(PID.dt)
         finally:
             plt.plot(Fig.time_data, Fig.target_vel_data, label="target")
-            plt.plot(Fig.time_data, Fig.vel_data, label="v")
-            plt.plot(Fig.time_data, Fig.w_data, label="ω")
+            plt.plot(Fig.time_data, Fig.vel_data, label="pid_error_v")
+            plt.plot(Fig.time_data, Fig.w_data, label="v_est")
             plt.legend()
             plt.grid(True)
             plt.savefig("speed.png")

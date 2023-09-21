@@ -30,18 +30,18 @@ class Fig:
 
 class Control:
     # 入力電圧
-    input_v = 11.8
+    input_v = 11.4
     # 目標角速度
     w_target = 0.0001
     # 目標速度
-    v_target = 0.4
+    v_target = 0.2
     # 目標加速度
-    a_target = 0.001
+    a_target = 0.0005
     # 目標角加速度
     alpha_target = 0.0001
     # 逆起電圧定数
-    Ke_r = 0.5905
-    Ke_l = 0.5905
+    Ke_r = 0.6129
+    Ke_l = 0.6129
     # Ke_r = 1.5295
     # Ke_l = 1.4848
     # トルク定数
@@ -60,7 +60,7 @@ class Control:
     # トレッド幅[m]
     tread_w = 0.32
     # 車輪半径[m]
-    wheel_r = 0.1
+    wheel_r = 0.05
     # 車体質量
     M = 24.6
     # 車体慣性モーメント J = ml^2
