@@ -12,24 +12,30 @@ import cv2
 import rospy
 from tang_msgs.msg import HumanInfo, IsDismiss
 
-window_name = 'red detection'
-min_area = 300
+window_name = 'color object detection'
 
-class DetectRed():
+class DetectColorObject():
     def __init__(self):
-        rospy.init_node('red_detection', anonymous=True)
+        rospy.init_node('color_object_detection', anonymous=True)
         # publisher
         self.cmd_publisher = rospy.Publisher('tang_cmd', HumanInfo, queue_size=1)
         self.is_dismiss_publisher = rospy.Publisher('is_dismiss', IsDismiss, queue_size=1)
-        self.is_dismiss = IsDismiss()
         # command type
         self.human_info = HumanInfo()
+        self.is_dismiss = IsDismiss()
         # camera
         self.video = cv2.VideoCapture(0)
         if not self.video.isOpened(): sys.exit()
+        # rosparam
         self.debug = rospy.get_param("/tang_detection/debug")
-        self.all_time = 0
-        self.count = 0
+        self.object_min_area = rospy.get_param("/tang_detection/object_min_area")
+        self.prev_time = 0.0
+    
+    def calc_delta_time(self):
+        now = rospy.Time.now().to_sec()
+        delta_t = now - self.prev_time
+        self.prev_time = now
+        return delta_t
 
     def calc_mask(self, hsv):
         # 赤色のHSVの値域1
@@ -69,22 +75,34 @@ class DetectRed():
         maxblob["area"] = data[:, 4][max_index]   # 面積
         maxblob["center"] = center[max_index]  # 中心座標
         return maxblob
+    
+    def calc_human_info(self, maxblob):
+        center_y = int(maxblob["center"][0]) # 画像の横方向
+        center_z = int(maxblob["center"][1]) # 画像の上下方向
+        radius   = int((maxblob["width"] + maxblob["height"])/4)
+        self.human_info.human_point.x = 0
+        self.human_info.human_point.y = center_y
+        self.human_info.human_point.z = center_z
+        self.human_info.max_area = radius
+        return
 
-    def detect_red(self):
-        r = rospy.Rate(10)
-        human_info = HumanInfo()
+    def detect_color_object(self):
+        dismiss_human_time = 0.0
+        all_time = 0.0
+        process_num = 0
         while not rospy.is_shutdown():
+            self.is_dismiss.flag = False
+            delta_t = self.calc_delta_time()
             # カメラの画像を１フレーム読み込み、frameに格納、retは読み込めたらtrueを格納する
             ret, frame = self.video.read()
+            # image_height: 480, image_width: 640
             image_height, image_width = frame.shape[:2]
             frame = cv2.resize(frame , (int(image_width*0.5), int(image_height*0.5)))
             if(not ret):  break
-            red_img = frame.copy()
-            start = time.time()
+            target_img = frame.copy()
 
-            hsv = cv2.cvtColor(red_img, cv2.COLOR_BGR2HSV)
+            hsv = cv2.cvtColor(target_img, cv2.COLOR_BGR2HSV)
             mask = self.calc_mask(hsv)
-            # masked_img = cv2.bitwise_and(frame, frame, mask=mask)
             h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
             # S, Vを2値化（大津の手法）
             ret, s = cv2.threshold(hsv[:, :, 1], 0, 255,
@@ -96,31 +114,34 @@ class DetectRed():
             h[(s == 0) | (v == 0)] = 100
 
             # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
-            target = self.analysis_blob(mask)
-            if(target == {}): continue
-            if(target["area"] < min_area): continue
-
-                # 面積最大ブロブの中心座標を取得
-            center_x = int(target["center"][0])
-            center_y = int(target["center"][1])
-            radius   = int((target["width"] + target["height"])/4)
-            human_info.human_point.x = center_x
-            human_info.human_point.y = center_y
-            human_info.human_point.z = 0
-            human_info.max_area = radius
-            self.cmd_publisher.publish(human_info)
+            maxblob = self.analysis_blob(mask)
+            # 人を見失った場合は停止する
+            if(maxblob == {}): continue
+            if(maxblob["area"] < self.object_min_area):
+                dismiss_human_time += delta_t
+                if dismiss_human_time > 2.0:
+                    self.human_info.is_human = 0
+                    rospy.loginfo("Dissmiss human : %lf", dismiss_human_time)
+                    self.is_dismiss.flag = True
+                    self.is_dismiss_publisher.publish(self.is_dismiss)
+                    continue
+            else:
+                self.is_dismiss.flag  = False
+                dismiss_human_time = 0.0
+                self.is_dismiss_publisher.publish(self.is_dismiss)
+            # 面積最大ブロブの中心座標を取得
+            self.calc_human_info(maxblob)
+            self.cmd_publisher.publish(self.human_info)
             # フレームに面積最大ブロブの中心周囲を円で描く
-            cv2.circle(red_img, (center_x, center_y), radius, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
-            cv2.circle(red_img, (center_x, center_y), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
-            
-            elapsed_time = time.time() - start
-            self.count += 1
-            self.all_time += elapsed_time
-            # print(1/(self.all_time/self.count), "fps")
+            cv2.circle(target_img, (self.human_info.human_point.y, self.human_info.human_point.z), self.human_info.max_area, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
+            cv2.circle(target_img, (self.human_info.human_point.y, self.human_info.human_point.z), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+            process_num += 1
+            all_time += delta_t
+            # print(1/(all_time/self.count), "fps")
             # 動画表示
             if ret:
                 if(self.debug):
-                    cv2.imshow(window_name, red_img)
+                    cv2.imshow(window_name, target_img)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             else:
@@ -128,8 +149,8 @@ class DetectRed():
                 print("cant show")
 
 if __name__ == "__main__":
-    detect_red = DetectRed()
-    detect_red.detect_red()
+    detect_color_object = DetectColorObject()
+    detect_color_object.detect_color_object()
     rospy.spin()
-    detect_red.video.release()
+    detect_color_object.video.release()
     cv2.destroyWindow(window_name)

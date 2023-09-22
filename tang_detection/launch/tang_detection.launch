@@ -1,9 +1,8 @@
 <launch>
 
-  <node name="tang_detection" pkg="tang_detection" type="red_detection.py" output="screen">
-    <param name = "video_path" value = "/videos/original.mp4"/> 
-    <!-- <param name = "video_path" value = "0"/>  -->
+  <node name="tang_detection" pkg="tang_detection" type="color_object_detection.py" output="screen">
     <param name = "debug" type="bool" value="0"/>
+    <param name = "object_min_area" type="int" value="100"/>
   </node>
 
 </launch>

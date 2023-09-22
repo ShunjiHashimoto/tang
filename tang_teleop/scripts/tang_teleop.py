@@ -7,7 +7,7 @@ from sensor_msgs.msg import Joy
 class TangTeleop():
     def __init__(self):
         self.btn = 0
-        self.main = 0
+        self.mode = 0
         self.joy_l = 0
         self.joy_r = 0
         self.percent = 50
@@ -30,7 +30,7 @@ class TangTeleop():
     def joyCallback(self, joy_msg):
         newbtn = 0
         
-        if(joy_msg.buttons[6]):
+        if(joy_msg.buttons[8]):
             newbtn |= self.BTN_BACK
         elif(joy_msg.buttons[1]):
             newbtn |= self.BTN_A
@@ -59,7 +59,7 @@ class TangTeleop():
         push = ((~self.btn) & newbtn)
         self.btn = newbtn
         if(push & self.BTN_BACK):
-            self.main = (self.main + 1)%2
+            self.mode = (self.mode + 1)%2
         elif(push & self.BTN_Y):
             self.percent += 10
         elif(push & self.BTN_A):

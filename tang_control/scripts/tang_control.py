@@ -3,19 +3,12 @@
 import rospy
 import time
 import pigpio
-from config import Pin, PWM, FOLLOWPID
+from config import Pin, PWM, FOLLOWPID, HumanFollowParam
 from motor import Motor
 # ros
 from tang_msgs.msg import HumanInfo, IsDismiss
 from tang_teleop.scripts.tang_teleop import TangTeleop
 from geometry_msgs.msg import Twist
-
-# modeを選択
-GPIO.setmode(GPIO.BCM)
-# pi = pigpio.pi()
-# モードのGPIOピン
-GPIO.setup(Pin.teleop_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(Pin.follow_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 class TangController():
     def __init__(self):
@@ -23,13 +16,14 @@ class TangController():
         # モードのGPIOピン
         self.pi.set_mode(Pin.teleop_mode, pigpio.INPUT)
         self.pi.set_mode(Pin.follow_mode, pigpio.INPUT)
-        self.pi.callback(Pin.teleop_mode, pigpio.FALLING, self.switch_on_callback, bouncetime=250)
-        self.pi.callback(Pin.teleop_mode, pigpio.FALLING, self.switch_on_callback, bouncetime=250)
+        self.pi.callback(Pin.teleop_mode, pigpio.FALLING_EDGE, self.switch_on_callback)
+        self.pi.callback(Pin.teleop_mode, pigpio.FALLING_EDGE, self.switch_on_callback)
         # HumanInfo.msg
         self.human_info = HumanInfo()
         self.cmdvel_from_imu = Twist()
-        self.main = 0
-        self.ref_pos = 150
+        self.mode = 0
+        # 画像の中心座標x, なるべくこの値に近づくように車体を制御する
+        self.ref_pos = 160
         self.speed = rospy.get_param("/tang_control/speed")
         self.prev_command = 0
         # teleop control
@@ -43,12 +37,13 @@ class TangController():
         self.is_dismiss = IsDismiss()
     
     def switch_on_callback(self, gpio):
-        result = self.pi.read(gpio) # ピンの値を読み取る(HIGH or LOWの1 or 0)
+        # ピンの値を読み取る(HIGH or LOWの1 or 0)
+        result = self.pi.read(gpio)
         if(gpio == Pin.teleop_mode and result == 0): 
-            self.tang_teleop.main = 0
+            self.tang_teleop.mode = 0
             print("Manual",gpio)
         if(gpio == Pin.follow_mode and result == 0): 
-            self.tang_teleop.main = 1
+            self.tang_teleop.mode = 1
             print("--Human",gpio)
         return
 
@@ -79,7 +74,7 @@ class TangController():
         """
         current_command = FOLLOWPID.p_gain * (self.ref_pos - cur_pos) + FOLLOWPID.d_gain*((self.ref_pos - cur_pos) - self.prev_command)/FOLLOWPID.dt
         self.prev_command = self.ref_pos - cur_pos
-        #print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
+        print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
         return current_command
 
     def send_vel_cmd(self, r_duty, l_duty):
@@ -106,39 +101,40 @@ class TangController():
     # 色検出を使ってモータ制御
     def follow_control(self):
         # 速度を距離に従って減衰させる、1m20cm以内で減衰開始する
-        if self.is_dismiss.flag: 
+        if self.is_dismiss.flag:
             self.send_vel_cmd(0, 0)
             return
-        if(self.human_info.human_point.x >= 2.0 or self.human_info.human_point.x < 0.0):
-            command_depth = 1.0
+        if(self.human_info.max_area <= HumanFollowParam.min_area_thresh):
+            distance_from_person_gain = 1.0
         else:
-            command_depth = self.human_info.human_point.x / 2.0
+            distance_from_person_gain = 1 - self.human_info.max_area/HumanFollowParam.max_area_thresh
+            if(distance_from_person_gain < 0): distance_from_person_gain = 0.0
         # コマンドの制御量を比例制御で決める
-        print(f"self.human_info.human_point.y: {self.human_info.human_point.y}, {self.human_info.human_point.x}")
-        # TODO: diffに応じて車体の速度と角速度を決める
-        diff_x = self.p_control(self.human_info.human_point.x)
-        w_target = diff_x*0.001
-        v_target = 0.4
+        print(f"self.human_info.human_point.y: {self.human_info.human_point.y}, z:{self.human_info.human_point.z}, radius: {self.human_info.max_area}")
+        diff_x = self.p_control(self.human_info.human_point.y)
+        w_target = diff_x
+        v_target = 0.3*distance_from_person_gain
         print(f"diff_x: {diff_x}")
         self.motor.run(v_target, w_target, a_target = 0.001, alpha_target = 0.0001)
         return
     
     def start_tang_control(self):
-        if self.tang_teleop.main == 0:
+        if self.tang_teleop.mode == 0:
             self.teleop_control()
-        elif self.tang_teleop.main == 1:
+        elif self.tang_teleop.mode == 1:
             self.follow_control()
         return 
             
 def main():
     rospy.init_node("tang_control", anonymous=True)
-    rate = rospy.Rate(10)
+    rate = rospy.Rate(100) # 100Hz
     tang_controller = TangController()
     while not rospy.is_shutdown():
         tang_controller.start_tang_control()
         rate.sleep()
     tang_controller.send_vel_cmd(0, 0)
     tang_controller.pi.stop()
+    tang_controller.motor.stop()
     rospy.spin()
                 
 if __name__ == '__main__':
