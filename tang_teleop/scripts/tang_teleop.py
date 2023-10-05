@@ -7,7 +7,7 @@ from sensor_msgs.msg import Joy
 class TangTeleop():
     def __init__(self):
         self.btn = 0
-        self.mode = 0
+        self.mode = 1
         self.joy_l = 0
         self.joy_r = 0
         self.percent = 50

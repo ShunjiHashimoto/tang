@@ -3,7 +3,7 @@
 import rospy
 import time
 import pigpio
-from config import Pin, PWM, FOLLOWPID, HumanFollowParam
+from config import Pin, PWM, FOLLOWPID, HumanFollowParam, Control
 from motor import Motor
 # ros
 from tang_msgs.msg import HumanInfo, IsDismiss
@@ -21,10 +21,8 @@ class TangController():
         # HumanInfo.msg
         self.human_info = HumanInfo()
         self.cmdvel_from_imu = Twist()
-        self.mode = 0
         # 画像の中心座標x, なるべくこの値に近づくように車体を制御する
-        self.ref_pos = 160
-        self.speed = rospy.get_param("/tang_control/speed")
+        self.ref_pos = HumanFollowParam.image_center
         self.prev_command = 0
         # teleop control
         self.tang_teleop = TangTeleop()
@@ -35,6 +33,8 @@ class TangController():
         self.imu_sub = rospy.Subscriber('cmdvel_from_imu', Twist, self.imu_callback, queue_size=1)
         self.is_dismiss_sub = rospy.Subscriber('is_dismiss', IsDismiss, self.dismiss_callback, queue_size=1)
         self.is_dismiss = IsDismiss()
+        # 前回のモード
+        self.prev_mode = 0
     
     def switch_on_callback(self, gpio):
         # ピンの値を読み取る(HIGH or LOWの1 or 0)
@@ -100,22 +100,26 @@ class TangController():
     
     # 色検出を使ってモータ制御
     def follow_control(self):
+        distance_gain = 0.0
         # 速度を距離に従って減衰させる、1m20cm以内で減衰開始する
         if self.is_dismiss.flag:
-            self.send_vel_cmd(0, 0)
+            self.motor.run(0.0, 0.0, Control.d_target, Control.alpha_target)
             return
         if(self.human_info.max_area <= HumanFollowParam.min_area_thresh):
-            distance_from_person_gain = 1.0
+            v_target = Control.max_velocity
         else:
-            distance_from_person_gain = 1 - self.human_info.max_area/HumanFollowParam.max_area_thresh
-            if(distance_from_person_gain < 0): distance_from_person_gain = 0.0
+            distance_gain = (1 - self.human_info.max_area/HumanFollowParam.max_area_thresh)
+            v_target = distance_gain*Control.max_velocity
+            if(v_target < 0): v_target = 0.0
         # コマンドの制御量を比例制御で決める
         print(f"self.human_info.human_point.y: {self.human_info.human_point.y}, z:{self.human_info.human_point.z}, radius: {self.human_info.max_area}")
-        diff_x = self.p_control(self.human_info.human_point.y)
-        w_target = diff_x
-        v_target = 0.3*distance_from_person_gain
-        print(f"diff_x: {diff_x}")
-        self.motor.run(v_target, w_target, a_target = 0.001, alpha_target = 0.0001)
+        w_target = self.p_control(self.human_info.human_point.y)
+        print(w_target)
+        if(abs(w_target) > Control.max_w):
+            if w_target<0: w_target = -Control.max_w
+            if w_target>0: w_target = Control.max_w
+        print(f"w_target: {w_target}, v_target: {v_target}")
+        self.motor.run(v_target, w_target, Control.a_target, Control.alpha_target)
         return
     
     def start_tang_control(self):
@@ -123,6 +127,7 @@ class TangController():
             self.teleop_control()
         elif self.tang_teleop.mode == 1:
             self.follow_control()
+        self.prev_mode = self.tang_teleop.mode 
         return 
             
 def main():

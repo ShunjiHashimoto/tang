@@ -50,7 +50,7 @@ class Motor:
         if gpio == self.last_gpio_r:
             return
         if gpio == Pin.encoder_r_A and level == 1:
-            self.encoder_values['r'] += 1 if self.last_level_r == 0 else -1
+            self.encoder_values['r'] += 1
         self.last_gpio_r = gpio
         self.last_level_r = level
 
@@ -58,7 +58,7 @@ class Motor:
         if gpio == self.last_gpio_l:
             return
         if gpio == Pin.encoder_l_A and level == 1:
-            self.encoder_values['l'] += 1 if self.last_level_l == 0 else -1
+            self.encoder_values['l'] += 1
         self.last_gpio_l = gpio
         self.last_level_l = level
 

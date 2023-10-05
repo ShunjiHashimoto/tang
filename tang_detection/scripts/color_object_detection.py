@@ -38,17 +38,13 @@ class DetectColorObject():
         return delta_t
 
     def calc_mask(self, hsv):
-        # 赤色のHSVの値域1
-        hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
-        hsv_max = np.array([6,255,255])
-        mask1 = cv2.inRange(hsv, hsv_min, hsv_max)
-        # 赤色のHSVの値域2
-        hsv_min = np.array([150,200,0])
-        hsv_max = np.array([179,255,255])
-        mask2 = cv2.inRange(hsv, hsv_min, hsv_max)
-        # 赤色領域のマスク（255：赤色、0：赤色以外）    
-        return(mask1 + mask2)
-
+        # 緑色のHSVの値域
+        hsv_min = np.array([30,120,0]) 
+        hsv_max = np.array([80,255,255])
+        # 緑色領域のマスク
+        mask = cv2.inRange(hsv, hsv_min, hsv_max)  
+        return(mask)
+        
     # ブロブ解析
     def analysis_blob(self, binary_img):
         # 2値画像のラベリング処理
@@ -58,16 +54,19 @@ class DetectColorObject():
         # label[2]の0行目を削除する、0行目は背景のラベルが格納されている
         data = np.delete(label[2], 0, 0) 
         center = np.delete(label[3], 0, 0)
+        # 面積最大ブロブの情報格納用
+        maxblob = {}
         # ブロブ面積最大のインデックス
         # 4列目のすべての中から最大値のindexを取得
         try:
             max_index = np.argmax(data[:, 4]) 
         except ValueError:
             # print("ValueError")
-            maxblob = {}
+            maxblob["area"] = 0
+            maxblob["center"] = [0, 0]
+            maxblob["width"] = 0
+            maxblob["height"] = 0
             return maxblob
-        # 面積最大ブロブの情報格納用
-        maxblob = {}
         # 面積最大ブロブの各種情報を取得
         maxblob["upper_left"] = (data[:, 0][max_index], data[:, 1][max_index]) # 左上座標(x, y)
         maxblob["width"] = data[:, 2][max_index]  # 幅
@@ -90,6 +89,7 @@ class DetectColorObject():
         dismiss_human_time = 0.0
         all_time = 0.0
         process_num = 0
+        ret, frame = self.video.read()
         while not rospy.is_shutdown():
             self.is_dismiss.flag = False
             delta_t = self.calc_delta_time()
@@ -97,7 +97,7 @@ class DetectColorObject():
             ret, frame = self.video.read()
             # image_height: 480, image_width: 640
             image_height, image_width = frame.shape[:2]
-            frame = cv2.resize(frame , (int(image_width*0.5), int(image_height*0.5)))
+            frame = cv2.resize(frame , (int(image_width*1.0), int(image_height*1.0)))
             if(not ret):  break
             target_img = frame.copy()
 
@@ -116,10 +116,10 @@ class DetectColorObject():
             # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
             maxblob = self.analysis_blob(mask)
             # 人を見失った場合は停止する
-            if(maxblob == {}): continue
             if(maxblob["area"] < self.object_min_area):
                 dismiss_human_time += delta_t
-                if dismiss_human_time > 2.0:
+                print(f"dismiss_human_time : {dismiss_human_time }")
+                if dismiss_human_time > 0.5:
                     self.human_info.is_human = 0
                     rospy.loginfo("Dissmiss human : %lf", dismiss_human_time)
                     self.is_dismiss.flag = True
@@ -135,6 +135,7 @@ class DetectColorObject():
             # フレームに面積最大ブロブの中心周囲を円で描く
             cv2.circle(target_img, (self.human_info.human_point.y, self.human_info.human_point.z), self.human_info.max_area, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
             cv2.circle(target_img, (self.human_info.human_point.y, self.human_info.human_point.z), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
+            print(f"max area: {self.human_info.max_area}")
             process_num += 1
             all_time += delta_t
             # print(1/(all_time/self.count), "fps")
