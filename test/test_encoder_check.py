@@ -49,7 +49,7 @@ class Motor:
         if gpio == self.last_gpio_r:
             return
         if gpio == Pin.encoder_r_A and level == 1:
-            self.encoder_values['r'] += 1 if self.last_level_r == 0 else 1
+            self.encoder_values['r'] += 1 
         self.last_gpio_r = gpio
         self.last_level_r = level
 
@@ -57,7 +57,7 @@ class Motor:
         if gpio == self.last_gpio_l:
             return
         if gpio == Pin.encoder_l_A and level == 1:
-            self.encoder_values['l'] += 1 if self.last_level_l == 0 else 1
+            self.encoder_values['l'] += 1 
         self.last_gpio_l = gpio
         self.last_level_l = level
 
@@ -158,31 +158,10 @@ class Motor:
                 if(current_time - self.prev_time_for_pwm > 0.01):
                     self.motor_control(w_r, w_l, i_r, i_l)
                     print(f"self.encoder_values['l']: {self.encoder_values['l']}")
-                    print(f"self.encoder_values['l']: {self.encoder_values['r']}")
                 time.sleep(PID.dt)
-            # self.prev_error['v'] = 0
-            # self.prev_error['w'] = 0
-            # Control.a_target  = -5.0
-            # Control.v_target  = 0.0
-            # while (self.encoder_values['l'] <= Control.encoder_1rotation_l*8):
-            #     # 時間更新
-            #     current_time = time.time()
-            #     dt = current_time - self.prev_time
-            #     self.prev_time = time.time()
-            #     # ログ
-            #     elapsed_time = datetime.now() - start_time
-            #     elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
-            #     Fig.time_data.append(elapsed_seconds)
-            #     # モータの目標角速度と電流値を計算
-            #     print("減速開始")
-            #     w_r, w_l, i_r, i_l= self.calc_target_w_i(Control.v_target, Control.w_target, Control.a_target, Control.alpha_target, dt)
-            #     # 0.01秒周期でモータに指令を送る
-            #     if(current_time - self.prev_time_for_pwm > 0.01):
-            #         self.motor_control(w_r, w_l, i_r, i_l)
-            #     time.sleep(PID.dt)
         finally:
             plt.plot(Fig.time_data, Fig.target_vel_data, label="target")
-            # plt.plot(Fig.time_data, Fig.vel_data, label="pid_error_v")
+            plt.plot(Fig.time_data, Fig.vel_data, label="pid_error_v")
             plt.plot(Fig.time_data, Fig.w_data, label="v_est")
             plt.legend()
             plt.grid(True)
