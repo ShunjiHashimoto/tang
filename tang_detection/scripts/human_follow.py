@@ -167,8 +167,11 @@ class HumanFollower():
             # 人の位置をPub、もし人が見えていれば観測値をPub、見えなければ推測値をPubする    
             if (human_info.is_human == 1):
                 dismiss_human_time = 0.0
-                human_input = self.calc_human_input(color_intr, human_point_pixel, delta_t)
                 human_point_pixel.z = depth_frame.get_distance(int(human_point_pixel.x), int(human_point_pixel.y))
+                human_input = self.calc_human_input(color_intr, human_point_pixel, delta_t)
+                human_info.human_point.x = human_input[0]
+                human_info.human_point.y = human_input[1]
+                human_info.human_point.z = human_input[2]
             else:
                 dismiss_human_time += delta_t
                 if dismiss_human_time > 2.0: 
@@ -180,7 +183,7 @@ class HumanFollower():
             self.is_dismiss.flag = False
             self.is_dismiss_publisher.publish(self.is_dismiss)
             self.cmd_publisher.publish(human_info)
-            # rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", human_info.human_point.x, human_info.human_point.y, human_info.human_point.z)
+            rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", human_info.human_point.x, human_info.human_point.y, human_info.human_point.z)
             if (self.debug): 
                 self.result_displayer.display_inference_result(cuda_mem, human_point_pixel, delta_t)
 
