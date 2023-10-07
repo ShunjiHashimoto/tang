@@ -7,6 +7,7 @@ import pigpio
 import sys
 import matplotlib.pyplot as plt
 from test_config import Pin, PID, PWM, Fig, Control
+from datetime import datetime
 
 class Motor:
     def __init__(self):
@@ -23,10 +24,13 @@ class Motor:
         self.prev_time_for_pwm = time.time()
         self.set_gpio()
         # プロット
-        plt.xlabel("Time [s]")
-        plt.ylabel("v[m/s]")
-        plt.title("Target v and Current v")
-        plt.ylim(0, 1)
+        self.fig = plt.figure()
+        self.ax1 = self.fig.add_subplot(1, 2, 1)
+        self.ax2 = self.fig.add_subplot(1, 2, 2)
+        # plt.xlabel("Time [s]")
+        # plt.ylabel("v[m/s]")
+        # plt.title("Target v and Current v")
+        # plt.ylim(0, 1)
         
     def set_gpio(self):
         self.pi.set_mode(Pin.encoder_r_A, pigpio.INPUT)
@@ -49,7 +53,7 @@ class Motor:
         if gpio == self.last_gpio_r:
             return
         if gpio == Pin.encoder_r_A and level == 1:
-            self.encoder_values['r'] += 1 if self.last_level_r == 0 else 1
+            self.encoder_values['r'] += 1 
         self.last_gpio_r = gpio
         self.last_level_r = level
 
@@ -57,14 +61,11 @@ class Motor:
         if gpio == self.last_gpio_l:
             return
         if gpio == Pin.encoder_l_A and level == 1:
-            self.encoder_values['l'] += 1 if self.last_level_l == 0 else 1
+            self.encoder_values['l'] += 1 
         self.last_gpio_l = gpio
         self.last_level_l = level
 
     def calculate_duty_cycle(self, duty):
-        if duty > 70:
-            print(f"over duty {duty}")
-            return 0
         # 1,000,000で100％
         return int(((duty/100) * 1000000))
     
@@ -109,9 +110,11 @@ class Motor:
         i_r = T_r/Control.Kt_r
         i_l = T_l/Control.Kt_l
         # ログ
+        Fig.target_w_data.append(Control.w_target)
         Fig.target_vel_data.append(Control.v_target)
-        Fig.vel_data.append(pid_error_v)
-        Fig.w_data.append(v_est)
+        Fig.vel_data.append(v_est)
+        Fig.w_data.append(w_est)
+        Fig.target_a_data.append(Control.a_target)
         return w_r, w_l, i_r, i_l
     
     def cal_duty(self, w_r, w_l, i_r, i_l):
@@ -129,9 +132,10 @@ class Motor:
     def motor_control(self, w_r, w_l, i_r, i_l):
         # duty計算
         duty_r, duty_l = self.cal_duty(w_r, w_l, i_r, i_l)
-        if(duty_r > PWM.max_duty or duty_l > PWM.max_duty or duty_r < 0 or duty_l < 0):
-            print(f"over duty: r={duty_r}, l={duty_l}")
-            return
+        if duty_r<0: duty_r=0
+        if duty_l<0: duty_l=0
+        if duty_r > PWM.max_duty: duty_r = PWM.max_duty
+        if duty_l > PWM.max_duty: duty_l = PWM.max_duty
         # PWM出力
         self.pwm_control(Pin.pwm_r, duty_r)
         self.pwm_control(Pin.pwm_l, duty_l)
@@ -158,37 +162,42 @@ class Motor:
                 if(current_time - self.prev_time_for_pwm > 0.01):
                     self.motor_control(w_r, w_l, i_r, i_l)
                     print(f"self.encoder_values['l']: {self.encoder_values['l']}")
-                    print(f"self.encoder_values['l']: {self.encoder_values['r']}")
                 time.sleep(PID.dt)
-            # self.prev_error['v'] = 0
-            # self.prev_error['w'] = 0
-            # Control.a_target  = -5.0
-            # Control.v_target  = 0.0
-            # while (self.encoder_values['l'] <= Control.encoder_1rotation_l*8):
-            #     # 時間更新
-            #     current_time = time.time()
-            #     dt = current_time - self.prev_time
-            #     self.prev_time = time.time()
-            #     # ログ
-            #     elapsed_time = datetime.now() - start_time
-            #     elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
-            #     Fig.time_data.append(elapsed_seconds)
-            #     # モータの目標角速度と電流値を計算
-            #     print("減速開始")
-            #     w_r, w_l, i_r, i_l= self.calc_target_w_i(Control.v_target, Control.w_target, Control.a_target, Control.alpha_target, dt)
-            #     # 0.01秒周期でモータに指令を送る
-            #     if(current_time - self.prev_time_for_pwm > 0.01):
-            #         self.motor_control(w_r, w_l, i_r, i_l)
-            #     time.sleep(PID.dt)
+            self.prev_error['v'] = 0
+            self.prev_error['w'] = 0
+            Control.a_target  = -1.0
+            Control.v_target  = 0.0
+            while (self.encoder_values['l'] <= Control.encoder_1rotation_l*Control.rotation_num*2):
+                # 時間更新
+                current_time = time.time()
+                dt = current_time - self.prev_time
+                self.prev_time = time.time()
+                # ログ
+                elapsed_time = datetime.now() - start_time
+                elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
+                Fig.time_data.append(elapsed_seconds)
+                # モータの目標角速度と電流値を計算
+                print("減速開始")
+                w_r, w_l, i_r, i_l= self.calc_target_w_i(Control.v_target, Control.w_target, Control.a_target, Control.alpha_target, dt)
+                # 0.01秒周期でモータに指令を送る
+                if(current_time - self.prev_time_for_pwm > 0.01):
+                    self.motor_control(w_r, w_l, i_r, i_l)
+                time.sleep(PID.dt)
         finally:
-            plt.plot(Fig.time_data, Fig.target_vel_data, label="target")
-            # plt.plot(Fig.time_data, Fig.vel_data, label="pid_error_v")
-            plt.plot(Fig.time_data, Fig.w_data, label="v_est")
-            plt.legend()
-            plt.grid(True)
-            plt.savefig("speed.png")
             self.pwm_control(Pin.pwm_r, 0)
             self.pwm_control(Pin.pwm_l, 0)
+            self.ax1.plot(Fig.time_data, Fig.vel_data, color="blue", label="vel_data")
+            self.ax1.plot(Fig.time_data, Fig.target_vel_data, color="green", label="target_vel")
+            self.ax1.plot(Fig.time_data, Fig.target_a_data, color="black", label="target_a")
+            self.ax2.plot(Fig.time_data, Fig.w_data, color="red", label="w_data")
+            self.ax2.plot(Fig.time_data, Fig.target_w_data, color="green", label="target_w")
+            self.ax1.legend(loc = 'upper right')
+            self.ax2.legend(loc = 'upper right')
+            self.ax1.grid(True)
+            self.ax2.grid(True)
+            self.fig.tight_layout()
+            now = datetime.now().replace(microsecond=0)
+            plt.savefig(f"/home/ubuntu/ros1_ws/src/tang/test/graph/{now}_v={Control.v_target}_a={Control.a_target}_w={Control.w_target}_α={Control.alpha_target}.png")
             self.pi.stop()
 
 def main():
@@ -197,8 +206,3 @@ def main():
     
 if __name__ == "__main__":
     main()
-    
-# print("\033[91m赤色のテキスト\033[0m")
-# print("\033[92m緑色のテキスト\033[0m")
-# print("\033[93m黄色のテキスト\033[0m")
-# print("\033[94m青色のテキスト\033[0m")

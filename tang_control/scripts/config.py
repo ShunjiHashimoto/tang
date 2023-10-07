@@ -60,11 +60,11 @@ class Control:
     # 巻線抵抗
     R = 3.05931
     # エンコーダ値1あたりの回転角度[rad]
-    radian_1encoder_r = 0.00306/2
-    radian_1encoder_l = 0.003095/2
+    radian_1encoder_r = 0.00306
+    radian_1encoder_l = 0.003095
     # モータ１回転あたりのエンコーダ値
-    encoder_1rotation_r = 2030*2
-    encoder_1rotation_l = 2050*2
+    encoder_1rotation_r = 2030
+    encoder_1rotation_l = 2030
     # モータの回転数
     rotation_num = 2
     # トレッド幅[m]
