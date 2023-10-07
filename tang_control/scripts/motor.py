@@ -24,10 +24,9 @@ class Motor:
         self.set_gpio()
         self.start_time = datetime.now()
         # プロット
-        plt.xlabel("Time [s]")
-        plt.ylabel("v[m/s]")
-        plt.title("Target v and Current v")
-        plt.ylim(0, 1)
+        self.fig = plt.figure()
+        self.ax1 = self.fig.add_subplot(1, 2, 1)
+        self.ax2 = self.fig.add_subplot(1, 2, 2)
         
     def set_gpio(self):
         self.pi.set_mode(Pin.encoder_r_A, pigpio.INPUT)
@@ -43,14 +42,14 @@ class Motor:
         self.pi.callback(Pin.encoder_r_B, pigpio.EITHER_EDGE, self.get_encoder_turn_r) 
         self.pi.set_pull_up_down(Pin.encoder_l_A, pigpio.PUD_UP)
         self.pi.set_pull_up_down(Pin.encoder_l_B, pigpio.PUD_UP)
-        self.pi.callback(Pin.encoder_l_B, pigpio.EITHER_EDGE, self.get_encoder_turn_l) 
         self.pi.callback(Pin.encoder_l_A, pigpio.EITHER_EDGE, self.get_encoder_turn_l) 
+        self.pi.callback(Pin.encoder_l_B, pigpio.EITHER_EDGE, self.get_encoder_turn_l) 
 
     def get_encoder_turn_r(self, gpio, level, tick):
         if gpio == self.last_gpio_r:
             return
         if gpio == Pin.encoder_r_A and level == 1:
-            self.encoder_values['r'] += 1
+            self.encoder_values['r'] += 1 
         self.last_gpio_r = gpio
         self.last_level_r = level
 
@@ -58,14 +57,11 @@ class Motor:
         if gpio == self.last_gpio_l:
             return
         if gpio == Pin.encoder_l_A and level == 1:
-            self.encoder_values['l'] += 1
+            self.encoder_values['l'] += 1 
         self.last_gpio_l = gpio
         self.last_level_l = level
 
     def calculate_duty_cycle(self, duty):
-        if duty > 70:
-            print(f"over duty {duty}")
-            return 0
         # 1,000,000で100％
         return int(((duty/100) * 1000000))
     
@@ -97,7 +93,7 @@ class Motor:
         self.prev_encoder_values['r'] = self.encoder_values['r']
         self.prev_encoder_values['l'] = self.encoder_values['l']
         # PID制御
-        pid_error_v, pid_error_w = self.pid_control(v_est, w_est,v_target, w_target,  dt)
+        pid_error_v, pid_error_w = self.pid_control(v_est, w_est, v_target, w_target,  dt)
         # 各モータの角速度
         w_r = (1/Control.wheel_r)*(v_est + pid_error_v) + (Control.tread_w/(2*Control.wheel_r)*(w_target + pid_error_w))
         w_l = (1/Control.wheel_r)*(v_est + pid_error_v) - (Control.tread_w/(2*Control.wheel_r)*(w_target + pid_error_w))
@@ -108,9 +104,11 @@ class Motor:
         i_r = T_r/Control.Kt_r
         i_l = T_l/Control.Kt_l
         # ログ
+        Fig.target_w_data.append(w_target)
         Fig.target_vel_data.append(v_target)
         Fig.vel_data.append(v_est)
         Fig.w_data.append(w_est)
+        Fig.target_a_data.append(a_target)
         return w_r, w_l, i_r, i_l
     
     def cal_duty(self, w_r, w_l, i_r, i_l):
@@ -128,9 +126,10 @@ class Motor:
     def motor_control(self, w_r, w_l, i_r, i_l):
         # duty計算
         duty_r, duty_l = self.cal_duty(w_r, w_l, i_r, i_l)
-        if(duty_r > PWM.max_duty or duty_l > PWM.max_duty or duty_r < 0 or duty_l < 0):
-            print(f"over duty: r={duty_r}, l={duty_l}")
-            return
+        if duty_r<0: duty_r=0
+        if duty_l<0: duty_l=0
+        if duty_r > PWM.max_duty: duty_r = PWM.max_duty
+        if duty_l > PWM.max_duty: duty_l = PWM.max_duty
         # PWM出力
         self.pwm_control(Pin.pwm_r, duty_r)
         self.pwm_control(Pin.pwm_l, duty_l)
@@ -153,14 +152,20 @@ class Motor:
         time.sleep(PID.dt)            
         
     def stop(self):
-        plt.plot(Fig.time_data, Fig.target_vel_data, label="target")
-        plt.plot(Fig.time_data, Fig.vel_data, label="v")
-        plt.plot(Fig.time_data, Fig.w_data, label="ω")
-        plt.legend()
-        plt.grid(True)
-        plt.savefig("speed.png")
         self.pwm_control(Pin.pwm_r, 0)
         self.pwm_control(Pin.pwm_l, 0)
+        self.ax1.plot(Fig.time_data, Fig.vel_data, color="blue", label="vel_data")
+        self.ax1.plot(Fig.time_data, Fig.target_vel_data, color="green", label="target_vel")
+        self.ax1.plot(Fig.time_data, Fig.target_a_data, color="black", label="target_a")
+        self.ax2.plot(Fig.time_data, Fig.w_data, color="red", label="w_data")
+        self.ax2.plot(Fig.time_data, Fig.target_w_data, color="green", label="target_w")
+        self.ax1.legend(loc = 'upper right')
+        self.ax2.legend(loc = 'upper right')
+        self.ax1.grid(True)
+        self.ax2.grid(True)
+        self.fig.tight_layout()
+        now = datetime.now().replace(microsecond=0)
+        plt.savefig(f"/home/ubuntu/ros1_ws/src/tang/test/graph/{now}_v={Control.v_target}_a={Control.a_target}_w={Control.w_target}_α={Control.alpha_target}.png")
         self.pi.stop()
             
 

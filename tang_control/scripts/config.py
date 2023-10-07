@@ -28,35 +28,39 @@ class PID:
 class PWM:
     # PWM周波数をHzで指定
     freq = 1000 # [Hz]
-    max_duty = 70
+    max_duty = 50
     
 class Fig:
     time_data  = []
     vel_data = []
     w_data = []
     target_vel_data = []
+    target_w_data = []
+    target_a_data = []
 
 class Control:
     # 入力電圧
-    input_v = 24.0
+    input_v = 24
     # 最大角速度
     max_w = 0.5
     # 最大速度
     max_velocity = 0.2
+    # 目標角速度
+    w_target = 0.2
+    # 目標速度
+    v_target = 0.4
     # 目標加速度
-    a_target = 0.001
+    a_target = 0.01
     # 目標減速加速度
-    d_target = 0.01
+    d_target = -0.01
     # 目標角加速度
     alpha_target = 0.01
     # 逆起電圧定数
-    Ke_r = 0.6129
-    Ke_l = 0.6129
-    # Ke_r = 1.5295
-    # Ke_l = 1.4848
+    Ke_r = 0.5905
+    Ke_l = 0.5905
     # トルク定数
-    Kt_r = 1.9
-    Kt_l = 1.9
+    Kt_r = 0.6666
+    Kt_l = 0.6666
     # 巻線抵抗
     R = 3.05931
     # エンコーダ値1あたりの回転角度[rad]
@@ -66,7 +70,7 @@ class Control:
     encoder_1rotation_r = 2030
     encoder_1rotation_l = 2030
     # モータの回転数
-    rotation_num = 2
+    rotation_num = 5
     # トレッド幅[m]
     tread_w = 0.32
     # 車輪半径[m]
