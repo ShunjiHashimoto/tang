@@ -16,8 +16,10 @@ class TangController():
         # モードのGPIOピン
         self.pi.set_mode(Pin.teleop_mode, pigpio.INPUT)
         self.pi.set_mode(Pin.follow_mode, pigpio.INPUT)
+        self.pi.set_mode(Pin.emergency_mode, pigpio.INPUT)
         self.pi.callback(Pin.teleop_mode, pigpio.FALLING_EDGE, self.switch_on_callback)
-        self.pi.callback(Pin.teleop_mode, pigpio.FALLING_EDGE, self.switch_on_callback)
+        self.pi.callback(Pin.follow_mode, pigpio.FALLING_EDGE, self.switch_on_callback)
+        self.pi.callback(Pin.emergency_mode, pigpio.EITHER_EDGE, self.emergency_button_callback)
         # HumanInfo.msg
         self.human_info = HumanInfo()
         self.cmdvel_from_imu = Twist()
@@ -35,16 +37,29 @@ class TangController():
         self.is_dismiss = IsDismiss()
         # 前回のモード
         self.prev_mode = 0
+        # 緊急停止時の設定
+        self.debounce_time_micros = 200000  # 0.2秒 = 200,000マイクロ秒
+        self.last_tick = 0
     
-    def switch_on_callback(self, gpio):
+    def switch_on_callback(self, gpio, level, tick):
         # ピンの値を読み取る(HIGH or LOWの1 or 0)
-        result = self.pi.read(gpio)
-        if(gpio == Pin.teleop_mode and result == 0): 
+        if(gpio == Pin.teleop_mode and level == 0): 
             self.tang_teleop.mode = 0
             print("Manual",gpio)
-        if(gpio == Pin.follow_mode and result == 0): 
+        if(gpio == Pin.follow_mode and level == 0): 
             self.tang_teleop.mode = 1
             print("--Human",gpio)
+        return
+    
+    def emergency_button_callback(self, gpio, level, tick):
+        if pigpio.tickDiff(self.last_tick, tick) >= self.debounce_time_micros:
+            if(gpio == Pin.emergency_mode and level == 1):
+                print(f"緊急停止モード: {gpio}, {level}")
+                self.stop_control()
+            if(gpio == Pin.emergency_mode and level == 0):
+                print(f"緊急停止モード解除: {gpio}, {level}")
+                self.tang_teleop.mode = 1
+            self.last_tick = tick
         return
 
     def cmd_callback(self, msg):
@@ -74,7 +89,7 @@ class TangController():
         """
         current_command = FOLLOWPID.p_gain * (self.ref_pos - cur_pos) + FOLLOWPID.d_gain*((self.ref_pos - cur_pos) - self.prev_command)/FOLLOWPID.dt
         self.prev_command = self.ref_pos - cur_pos
-        print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
+        # print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
         return current_command
 
     def send_vel_cmd(self, r_duty, l_duty):
@@ -94,7 +109,7 @@ class TangController():
         if motor_r >= 0: self.motor.pi.write(Pin.direction_r, pigpio.HIGH)
         if motor_l < 0: self.motor.pi.write(Pin.direction_l, pigpio.LOW)
         if motor_r < 0: self.motor.pi.write(Pin.direction_r, pigpio.LOW)
-        rospy.loginfo(f"motor_l: {motor_l}, motor_r: {motor_r}")
+        # rospy.loginfo(f"motor_l: {motor_l}, motor_r: {motor_r}")
         self.send_vel_cmd(motor_r, motor_l)
         return
     
@@ -112,17 +127,26 @@ class TangController():
             v_target = distance_gain*Control.max_velocity
             if(v_target < 0): v_target = 0.0
         # コマンドの制御量を比例制御で決める
-        print(f"self.human_info.human_point.y: {self.human_info.human_point.y}, z:{self.human_info.human_point.z}, radius: {self.human_info.max_area}")
+        # print(f"self.human_info.human_point.y: {self.human_info.human_point.y}, z:{self.human_info.human_point.z}, radius: {self.human_info.max_area}")
         w_target = self.p_control(self.human_info.human_point.y)
         if(abs(w_target) > Control.max_w):
             if w_target<0: w_target = -Control.max_w
             if w_target>0: w_target = Control.max_w
-        print(f"w_target: {w_target}, v_target: {v_target}")
         self.motor.run(v_target, w_target, Control.a_target, Control.alpha_target)
         return
     
+    def stop_control(self):
+        self.tang_teleop.mode = 99
+        self.motor.error_sum = {'v' : 0, 'w' : 0}
+        self.motor.prev_error = {'v' : 0, 'w' : 0}
+        self.encoder_values = {'r' : 0, 'l' : 0}
+        self.prev_encoder_values = {'r' : 0, 'l' : 0}
+        return
+    
     def start_tang_control(self):
-        if self.tang_teleop.mode == 0:
+        if self.pi.read(Pin.emergency_mode): 
+            return
+        elif self.tang_teleop.mode == 0:
             self.teleop_control()
         elif self.tang_teleop.mode == 1:
             self.follow_control()

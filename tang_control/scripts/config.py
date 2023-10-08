@@ -12,6 +12,7 @@ class Pin:
     pwm_r        = 12
     teleop_mode = 21
     follow_mode = 16
+    emergency_mode = 26
 
 class FOLLOWPID:
     p_gain = 0.002

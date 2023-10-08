@@ -1,6 +1,6 @@
 <launch>
 
-  <node name="tang_detection" pkg="tang_detection" type="color_object_detection.py" output="screen">
+  <node name="tang_detection" pkg="tang_detection" type="color_object_detection.py">
     <param name = "debug" type="bool" value="1"/>
     <param name = "object_min_area" type="int" value="100"/>
   </node>
