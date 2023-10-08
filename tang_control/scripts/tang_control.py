@@ -114,7 +114,6 @@ class TangController():
         # コマンドの制御量を比例制御で決める
         print(f"self.human_info.human_point.y: {self.human_info.human_point.y}, z:{self.human_info.human_point.z}, radius: {self.human_info.max_area}")
         w_target = self.p_control(self.human_info.human_point.y)
-        print(w_target)
         if(abs(w_target) > Control.max_w):
             if w_target<0: w_target = -Control.max_w
             if w_target>0: w_target = Control.max_w

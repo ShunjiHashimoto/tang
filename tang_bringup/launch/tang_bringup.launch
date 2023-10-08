@@ -7,7 +7,7 @@
     <param name="deadzone" value="0.12" />
   </node>
 
-  <node name="tang_control" pkg="tang_control" type="tang_control.py" output="screen">
+  <node name="tang_control" pkg="tang_control" type="tang_control.py">
     <param name = "speed" type = "int" value = "50"/>
   </node>
   

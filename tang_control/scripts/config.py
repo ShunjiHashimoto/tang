@@ -85,4 +85,4 @@ class HumanFollowParam:
     min_area_thresh = 70
     max_area_thresh = 250
     # 画像中心のx座標
-    image_center = 320
+    image_center = 1280/2
