@@ -32,9 +32,9 @@ spi.open(0,0)
 spi.max_speed_hz = 100000 
 
 # atomlite setting
-usb_device = serial.Serial('/dev/ttyUSB0', '115200', timeout=1.0)
-atom_command = 'hearton'
-usb_device.write(atom_command.encode())
+# usb_device = serial.Serial('/dev/ttyUSB0', '115200', timeout=1.0)
+# atom_command = 'hearton'
+# usb_device.write(atom_command.encode())
 
 class TangController():
     def __init__(self):
@@ -79,7 +79,7 @@ class TangController():
             self.main = 1
             atom_command = 'human'
             print("-------------------------Human",gpio)
-        usb_device.write(atom_command.encode())
+        # usb_device.write(atom_command.encode())
         self.current_mode.mode = self.main
         self.mode_pub.publish(self.current_mode)
         return
@@ -142,8 +142,8 @@ class TangController():
 
     def manual_control(self):
         # Read the joystick position data
-        vrx_pos = (self.read_analog_pin(Pin.vrx_channel) -515)/8
-        vry_pos = -(self.read_analog_pin(Pin.vry_channel ) -515)/8
+        vrx_pos = -(self.read_analog_pin(Pin.vrx_channel) -515)/8
+        vry_pos = (self.read_analog_pin(Pin.vry_channel ) -515)/8
         # Read switch 
         print("X_flat : {}  Y_verti : {} ".format(vrx_pos, vry_pos))
         motor_r = 0
@@ -233,6 +233,6 @@ def main():
 if __name__ == '__main__':
     main()
     atom_command = 'heartoff'
-    usb_device.write(atom_command.encode())
+    # usb_device.write(atom_command.encode())
     GPIO.cleanup(Pin.teleop_mode)
     GPIO.cleanup(Pin.follow_mode)
