@@ -24,11 +24,8 @@ class CameraConfig:
     depth_to_disparity = rs.disparity_transform(True)
     disparity_to_depth = rs.disparity_transform(False)
 
-class GearConfig:
-    Pitch = 6.1850105367549055/2/1000
-    right_gear_pin = 24
-    left_gear_pin = 23
-
 class HumanDetectionConfig:
     # ssd-mobilenet-v2, peoplenet
     model = "ssd-mobilenet-v2"
+    # 人を見失ったときにロボットが止まるまでの時間
+    dismiss_time_thresh = 1.0

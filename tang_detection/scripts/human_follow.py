@@ -7,7 +7,7 @@ import math
 import numpy as np
 from geometry_msgs.msg import Point
 from tang_msgs.msg import HumanInfo, Modechange, IsDismiss
-from config import CameraConfig
+from config import CameraConfig, HumanDetectionConfig
 import jetson_utils
 import rospy
 import roslib.packages
@@ -167,14 +167,17 @@ class HumanFollower():
             # 人の位置をPub、もし人が見えていれば観測値をPub、見えなければ推測値をPubする    
             if (human_info.is_human == 1):
                 dismiss_human_time = 0.0
-                human_point_pixel.z = depth_frame.get_distance(int(human_point_pixel.x), int(human_point_pixel.y))
+                depth_image = np.asanyarray(depth_frame.get_data())
+                roi_depth = depth_image[human_info.detected_bbox.top:human_info.detected_bbox.bottom, human_info.detected_bbox.left:human_info.detected_bbox.right]
+                min_depth_index = np.unravel_index(np.argmin(roi_depth, axis=None), roi_depth.shape)
+                human_point_pixel.z = depth_frame.get_distance(int(min_depth_index[1]), int(min_depth_index[0]))
                 human_input = self.calc_human_input(color_intr, human_point_pixel, delta_t)
                 human_info.human_point.x = human_input[0]
                 human_info.human_point.y = human_input[1]
                 human_info.human_point.z = human_input[2]
             else:
                 dismiss_human_time += delta_t
-                if dismiss_human_time > 2.0: 
+                if dismiss_human_time > HumanDetectionConfig.dismiss_time_thresh: 
                     human_info.is_human = 0
                     rospy.loginfo("Dissmiss human : %lf", dismiss_human_time)
                     self.is_dismiss.flag = True

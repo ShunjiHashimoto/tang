@@ -1,3 +1,4 @@
 bool is_human
 geometry_msgs/Point human_point
 int64 detected_max_box_size
+BoundingBox detected_bbox

@@ -23,6 +23,7 @@ add_message_files(
   Modechange.msg
   DetectionResult.msg
   IsDismiss.msg
+  BoundingBox.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -44,6 +45,7 @@ generate_messages(
   DEPENDENCIES
   std_msgs
   geometry_msgs
+  tang_msgs
 )
 
 catkin_package(
