@@ -19,8 +19,8 @@ class Pin:
     emergency_mode = 26
 
 class FOLLOWPID:
-    p_gain = 15.0 
-    d_gain = 7.0
+    p_gain = 2.307
+    d_gain = 0.0
     #d_gain = 7.0
     dt = 0.1
 

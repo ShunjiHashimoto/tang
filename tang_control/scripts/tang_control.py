@@ -32,8 +32,10 @@ class TangController():
         # モードのGPIOピン
         GPIO.setup(Pin.teleop_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
         GPIO.setup(Pin.follow_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.setup(Pin.emergency_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
         GPIO.add_event_detect(Pin.teleop_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
         GPIO.add_event_detect(Pin.follow_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
+        GPIO.add_event_detect(Pin.emergency_mode, GPIO.FALLING, callback=self.emergency_button_callback, bouncetime=250)
         # HumanInfo.msg
         self.human_info = HumanInfo()
         self.cmdvel_from_imu = Twist()
@@ -59,8 +61,7 @@ class TangController():
         self.is_dismiss = IsDismiss()
         # publisher, モードと距離の閾値、赤色検出の閾値をpub
         self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
-        self.debounce_time_micros = 200000  # 0.2秒 = 200,000マイクロ秒
-        self.last_tick = 0
+        self.prev_mode = 0
     
     def read_analog_pin(self, channel):
         adc = spi.xfer2([1, (8 + channel)<<4, 0])
@@ -81,6 +82,14 @@ class TangController():
         # usb_device.write(atom_command.encode())
         self.current_mode.mode = self.main
         self.mode_pub.publish(self.current_mode)
+        return
+    
+    def emergency_button_callback(self, gpio):
+        result = GPIO.input(gpio)
+        if(gpio == Pin.emergency_mode and result == 0):
+            print(f"緊急停止モード解除: {gpio}")
+            self.stop_control()
+            self.main = self.prev_mode
         return
 
     def cmd_callback(self, msg):
@@ -126,7 +135,7 @@ class TangController():
         """
         current_command = FOLLOWPID.p_gain * (self.ref_pos - cur_pos) + FOLLOWPID.d_gain*((self.ref_pos - cur_pos) - self.prev_command)/FOLLOWPID.dt
         self.prev_command = self.ref_pos - cur_pos
-        #print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
+        print(f"current_command: {cur_pos}")
         return current_command
 
     def send_vel_cmd(self, r_duty, l_duty):
@@ -144,7 +153,7 @@ class TangController():
         vrx_pos = self.read_analog_pin(Pin.vrx_channel) / Control.max_joystick_val * 2 - 1  # normalize to [-1, 1]
         vry_pos = self.read_analog_pin(Pin.vry_channel) / Control.max_joystick_val * 2 - 1  # normalize to [-1, 1]
         # Debugging
-        print("Normalized X : {}  Normalized Y : {} ".format(vrx_pos, vry_pos))
+        # print("Normalized X : {}  Normalized Y : {} ".format(vrx_pos, vry_pos))
         # Calculate linear and angular velocity
         linear_velocity = Control.max_linear_vel * max(vry_pos, 0)  # vry_pos negative would mean backward, but we restrict that
         angular_velocity = vrx_pos * Control.max_angular_vel
@@ -153,7 +162,7 @@ class TangController():
             linear_velocity = 0
         if abs(angular_velocity) < Control.velocity_thresh:
             angular_velocity = 0
-        print(f"linear_velocity{linear_velocity}, angular_velocity{angular_velocity}")
+        # print(f"linear_velocity{linear_velocity}, angular_velocity{angular_velocity}")
         # Decide acceleration for linear velocity
         linear_acceleration = Control.a_target
         if linear_velocity == 0:
@@ -178,38 +187,44 @@ class TangController():
             command_depth = 1.0
         else:
             command_depth = self.human_info.human_point.x / 2.0
-        motor_r = self.speed * command_depth
-        motor_l = self.speed * command_depth
+        linear_velocity = Control.max_linear_vel * command_depth
         # コマンドの制御量を比例制御で決める
-        self.command_pwm = self.p_control(self.human_info.human_point.y)
-        if (abs(self.command_pwm) > motor_r and self.command_pwm < 0.0):
-            self.command_pwm = -self.speed * command_depth
-        elif (abs(self.command_pwm) > motor_r and self.command_pwm > 0.0):
-            self.command_pwm = self.speed * command_depth
+        angular_velocity = -self.p_control(self.human_info.human_point.y)
         # 80cm以内であれば止まる
         if self.human_info.human_point.x <= HumanFollowParam.depth_min_thresh and self.human_info.human_point.x > 0.0:
             rospy.logwarn("Stop: %lf", self.human_info.human_point.x)
-            motor_r = 0
-            motor_l = 0
-        elif (self.command_pwm < 0): # 右回り
-            motor_r -= self.command_pwm/10
-            motor_r = motor_r*1.1
-            motor_l += self.command_pwm 
-            # rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Right", motor_l, motor_r)
-        elif (self.command_pwm >= 0): # 左回り
-            motor_l += self.command_pwm/10
-            motor_l = motor_l*1.1
-            motor_r -= self.command_pwm
-            # rospy.loginfo("motor_l %lf, motor_r %lf , | Turn Left", motor_l, motor_r)
-        self.send_vel_cmd(motor_r, motor_l)
+            linear_velocity = 0.0
+            angular_velocity = 0.0
+        # 加速度設定
+        linear_acceleration = Control.a_target
+        if linear_velocity == 0:
+            linear_acceleration = Control.d_target
+        # 減速時の加速度設定
+        if angular_velocity < self.prev_angular_velocity:
+            angular_acceleration = -Control.alpha_target
+        else:
+            angular_acceleration = Control.alpha_target
+        # モータに指令値を送る
+        self.motor.run(linear_velocity, angular_velocity, linear_acceleration, angular_acceleration)
+        # Update previous velocities
+        self.prev_linear_velocity = linear_velocity
+        self.prev_angular_velocity = angular_velocity
         return
     
     def change_control_mode(self):
+        self.prev_mode = self.main
         if self.main == 0:
             self.manual_control()
         elif self.main == 1:
             self.follow_control()
-        return 
+        return
+    
+    def stop_control(self):
+        self.motor.error_sum = {'v' : 0, 'w' : 0}
+        self.motor.prev_error = {'v' : 0, 'w' : 0}
+        self.encoder_values = {'r' : 0, 'l' : 0}
+        self.prev_encoder_values = {'r' : 0, 'l' : 0}
+        return
             
 def main():
     rospy.init_node("tang_control", anonymous=True)
@@ -224,7 +239,8 @@ def main():
         rate.sleep()
     tang_controller.send_vel_cmd(0, 0)
     tang_controller.pi.stop()
-    tang_controller.motor.stop()
+    tang_controller.motor.stop()	
+    GPIO.cleanup()
     rospy.spin()
                 
 if __name__ == '__main__':

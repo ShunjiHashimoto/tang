@@ -75,8 +75,8 @@ class Motor:
         if(error_v < 0): error_v = error_v/10
         pid_error_v = PID.Kp_v*error_v + PID.Ki_v*self.error_sum['v'] + PID.Kd_v*(error_v - self.prev_error['v'])/dt
         pid_error_w = PID.Kp_w*error_w + PID.Ki_w*self.error_sum['w'] + PID.Kd_w*(error_w - self.prev_error['w'])/dt
-        print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{(error_v - self.prev_error['v'])}\033[0m")
-        print(f"\033[91merror_w: {error_w:.3f}, 目標速度：{w_target}, 現在速度：{w_curr}, 計算後のerror_w: {pid_error_w:.3f}, error_sum: {self.error_sum['w']:.3f}, Dゲインの値{(error_w - self.prev_error['w'])}\033[0m")
+        # print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{(error_v - self.prev_error['v'])}\033[0m")
+        # print(f"\033[91merror_w: {error_w:.3f}, 目標速度：{w_target}, 現在速度：{w_curr}, 計算後のerror_w: {pid_error_w:.3f}, error_sum: {self.error_sum['w']:.3f}, Dゲインの値{(error_w - self.prev_error['w'])}\033[0m")
         self.error_sum['v'] += error_v
         self.error_sum['w'] += error_w
         self.prev_error['v'] = error_v
@@ -95,7 +95,7 @@ class Motor:
         self.prev_encoder_values['l'] = self.encoder_values['l']
         # PID制御
         pid_error_v, pid_error_w = self.pid_control(v_est, w_est, v_target, w_target,  dt)
-        print(f"pid_error_v: {pid_error_v}, pid_error_w: {pid_error_w}")
+        # print(f"pid_error_v: {pid_error_v}, pid_error_w: {pid_error_w}")
         # 各モータの角速度
         w_r = (1/Control.wheel_r)*(v_est + pid_error_v) + (Control.tread_w/(2*Control.wheel_r)*(w_target + pid_error_w))
         w_l = (1/Control.wheel_r)*(v_est + pid_error_v) - (Control.tread_w/(2*Control.wheel_r)*(w_target + pid_error_w))
@@ -132,7 +132,7 @@ class Motor:
         if duty_l<0: duty_l=0
         if duty_r > PWM.max_duty: duty_r = PWM.max_duty
         if duty_l > PWM.max_duty: duty_l = PWM.max_duty
-        print(f"duty_R: {duty_r}. dutt_l: {duty_l}")
+        # print(f"duty_R: {duty_r}. dutt_l: {duty_l}")
         # PWM出力
         self.pwm_control(Pin.pwm_r, duty_r)
         self.pwm_control(Pin.pwm_l, duty_l)
