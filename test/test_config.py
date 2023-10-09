@@ -3,14 +3,14 @@
 import math
 
 class Pin:
-    encoder_l_A  = 5
-    encoder_l_B  = 6
-    direction_l = 18
-    pwm_l        = 13 
-    encoder_r_A  = 22
-    encoder_r_B  = 27
-    direction_r = 17
-    pwm_r        = 12
+    encoder_l_A  = 22
+    encoder_l_B  = 27
+    direction_l = 17
+    pwm_l        = 12
+    encoder_r_A  = 5
+    encoder_r_B  = 6
+    direction_r = 18
+    pwm_r        = 13
     teleop_mode = 21
     follow_mode = 16
 
@@ -21,9 +21,12 @@ class FOLLOWPID:
     dt = 0.1
 
 class PID:
-    Kp = 1.0
-    Ki = 0.01
-    Kd = 0.00
+    Kp_v = 1.0
+    Ki_v = 0.01
+    Kd_v = 0.00
+    Kp_w = 1.0
+    Ki_w = 0.001
+    Kd_w = 0.00
     dt = 0.005 # 0.0001がmax
     
 class PWM:
@@ -43,7 +46,7 @@ class Control:
     # 入力電圧
     input_v = 27
     # 目標角速度
-    w_target = 0.0001
+    w_target = 0.2
     # 目標速度
     v_target = 0.3
     # 目標加速度
@@ -59,8 +62,8 @@ class Control:
     # 巻線抵抗
     R = 3.05931
     # モータ１回転あたりのエンコーダ値
-    encoder_1rotation_r = 2150
-    encoder_1rotation_l = 1900
+    encoder_1rotation_r = 2030
+    encoder_1rotation_l = 2030
     # エンコーダ値1あたりの回転角度[rad]
     radian_1encoder_r = 2*math.pi/encoder_1rotation_r
     radian_1encoder_l = 2*math.pi/encoder_1rotation_l

@@ -7,29 +7,19 @@ import spidev
 import RPi.GPIO as GPIO
 import pigpio
 import lcd_display
-from config import Pin, PID, PWM, HumanFollowParam
+from config import Pin, PWM, FOLLOWPID, HumanFollowParam, Control
+from motor import Motor
 # ros
 from sensor_msgs.msg import Joy
 from tang_msgs.msg import HumanInfo, Modechange, IsDismiss
 from geometry_msgs.msg import Twist
 
-# modeを選択
-GPIO.setmode(GPIO.BCM)
-pi = pigpio.pi()
-
-# 回転方向のGPIOピン
-GPIO.setup(Pin.r_direction, GPIO.OUT)
-GPIO.setup(Pin.l_direction, GPIO.OUT)
-GPIO.output(Pin.r_direction, GPIO.HIGH)
-GPIO.output(Pin.l_direction, GPIO.HIGH)
-# モードのGPIOピン
-GPIO.setup(Pin.teleop_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(Pin.follow_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-
 # spi settings
 spi = spidev.SpiDev()
 spi.open(0,0)
 spi.max_speed_hz = 100000 
+
+GPIO.setmode(GPIO.BCM)
 
 # atomlite setting
 # usb_device = serial.Serial('/dev/ttyUSB0', '115200', timeout=1.0)
@@ -38,6 +28,12 @@ spi.max_speed_hz = 100000
 
 class TangController():
     def __init__(self):
+        self.pi = pigpio.pi()
+        # モードのGPIOピン
+        GPIO.setup(Pin.teleop_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.setup(Pin.follow_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.add_event_detect(Pin.teleop_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
+        GPIO.add_event_detect(Pin.follow_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
         # HumanInfo.msg
         self.human_info = HumanInfo()
         self.cmdvel_from_imu = Twist()
@@ -51,9 +47,10 @@ class TangController():
         self.command_pwm = 0
         # LCD Display
         self.mylcd = lcd_display.lcd()
-
-        GPIO.add_event_detect(Pin.teleop_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
-        GPIO.add_event_detect(Pin.follow_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
+        # motor
+        self.motor = Motor()
+        self.prev_linear_velocity = 0
+        self.prev_angular_velocity = 0
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
         self.human_info_sub = rospy.Subscriber('tang_cmd', HumanInfo, self.cmd_callback, queue_size=1)
@@ -62,6 +59,8 @@ class TangController():
         self.is_dismiss = IsDismiss()
         # publisher, モードと距離の閾値、赤色検出の閾値をpub
         self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
+        self.debounce_time_micros = 200000  # 0.2秒 = 200,000マイクロ秒
+        self.last_tick = 0
     
     def read_analog_pin(self, channel):
         adc = spi.xfer2([1, (8 + channel)<<4, 0])
@@ -125,7 +124,7 @@ class TangController():
         @fn p_control()
         @details P制御
         """
-        current_command = PID.p_gain * (self.ref_pos - cur_pos) + PID.d_gain*((self.ref_pos - cur_pos) - self.prev_command)/PID.dt
+        current_command = FOLLOWPID.p_gain * (self.ref_pos - cur_pos) + FOLLOWPID.d_gain*((self.ref_pos - cur_pos) - self.prev_command)/FOLLOWPID.dt
         self.prev_command = self.ref_pos - cur_pos
         #print("cur_pos: ", cur_pos, "diff between cur and ref: ", self.ref_pos - cur_pos)
         return current_command
@@ -135,43 +134,39 @@ class TangController():
         r_duty, l_duty = self.nomarilze_speed(r_duty, l_duty)
         r_cnv_dutycycle = int((r_duty * 1000000 / 100))
         l_cnv_dutycycle = int((l_duty * 1000000 / 100))
-        pi.hardware_PWM(Pin.r_pwm, PWM.freq, r_cnv_dutycycle)
-        pi.hardware_PWM(Pin.l_pwm, PWM.freq, l_cnv_dutycycle)
+        self.pi.hardware_PWM(Pin.pwm_r, PWM.freq, r_cnv_dutycycle)
+        self.pi.hardware_PWM(Pin.pwm_l, PWM.freq, l_cnv_dutycycle)
         # rospy.loginfo("r_duty : %d | l_duty: %d", r_duty, l_duty)
         return
 
     def manual_control(self):
         # Read the joystick position data
-        vrx_pos = -(self.read_analog_pin(Pin.vrx_channel) -515)/8
-        vry_pos = (self.read_analog_pin(Pin.vry_channel ) -515)/8
-        # Read switch 
-        print("X_flat : {}  Y_verti : {} ".format(vrx_pos, vry_pos))
-        motor_r = 0
-        motor_l = 0
-        # 前進
-        if(vry_pos > 1.0):
-            # 左旋回
-            if(vrx_pos < -1.0):
-                motor_r = vry_pos
-                motor_l = vry_pos + vrx_pos
-            # 右旋回
-            else:
-                motor_r = vry_pos - vrx_pos
-                motor_l = vry_pos 
-            if(motor_l < 0): motor_l = 0
-            if(motor_r < 0): motor_r = 0
-        elif(vry_pos < -1.0):
-            if(vrx_pos < -1.0):
-                motor_r = -vry_pos - vrx_pos
-                motor_l = -vry_pos 
-            else:
-                motor_r = -vry_pos 
-                motor_l = -vry_pos + vrx_pos
-            if(motor_l < 0): motor_l = 0
-            if(motor_r < 0): motor_r = 0
-        else:    
-            print("Nothing") 
-        self.send_vel_cmd(motor_r, motor_l)
+        vrx_pos = self.read_analog_pin(Pin.vrx_channel) / Control.max_joystick_val * 2 - 1  # normalize to [-1, 1]
+        vry_pos = self.read_analog_pin(Pin.vry_channel) / Control.max_joystick_val * 2 - 1  # normalize to [-1, 1]
+        # Debugging
+        print("Normalized X : {}  Normalized Y : {} ".format(vrx_pos, vry_pos))
+        # Calculate linear and angular velocity
+        linear_velocity = Control.max_linear_vel * max(vry_pos, 0)  # vry_pos negative would mean backward, but we restrict that
+        angular_velocity = vrx_pos * Control.max_angular_vel
+        # Set velocities to zero if they are below the threshold
+        if abs(linear_velocity) < Control.velocity_thresh:
+            linear_velocity = 0
+        if abs(angular_velocity) < Control.velocity_thresh:
+            angular_velocity = 0
+        print(f"linear_velocity{linear_velocity}, angular_velocity{angular_velocity}")
+        # Decide acceleration for linear velocity
+        linear_acceleration = Control.a_target
+        if linear_velocity == 0:
+            linear_acceleration = Control.d_target
+        # Decide acceleration for angular velocity
+        if angular_velocity < self.prev_angular_velocity:
+            angular_acceleration = -Control.alpha_target
+        else:
+            angular_acceleration = Control.alpha_target
+        self.motor.run(linear_velocity, angular_velocity, linear_acceleration, angular_acceleration)
+        # Update previous velocities
+        self.prev_linear_velocity = linear_velocity
+        self.prev_angular_velocity = angular_velocity
         return
 
     def follow_control(self):
@@ -228,11 +223,11 @@ def main():
         tang_controller.change_control_mode()
         rate.sleep()
     tang_controller.send_vel_cmd(0, 0)
+    tang_controller.pi.stop()
+    tang_controller.motor.stop()
     rospy.spin()
                 
 if __name__ == '__main__':
     main()
     atom_command = 'heartoff'
     # usb_device.write(atom_command.encode())
-    GPIO.cleanup(Pin.teleop_mode)
-    GPIO.cleanup(Pin.follow_mode)

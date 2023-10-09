@@ -16,14 +16,14 @@ class Motor:
         self.last_gpio_l = None
         self.last_level_l = None
         self.cnt_list = [0, 0]
-        self.r_encoder_pin_A = 22
-        self.r_encoder_pin_B = 27
+        self.r_encoder_pin_A = 5
+        self.r_encoder_pin_B = 6
         self.r_direction_gpio = 17
-        self.r_pwm_pin = 12
-        self.l_encoder_pin_A = 5
-        self.l_encoder_pin_B = 6
+        self.r_pwm_pin = 13
+        self.l_encoder_pin_A = 22
+        self.l_encoder_pin_B = 27
         self.l_direction_gpio = 18
-        self.l_pwm_pin = 13 
+        self.l_pwm_pin = 12
 
     def get_encoder_turn_r(self, gpio, level, tick):
         if gpio == self.last_gpio_r:
@@ -77,10 +77,10 @@ class Motor:
             while (self.cnt_list[0] <= Control.encoder_1rotation_r*2):
                 print( '\033[31m'+'右車輪の速度: '+'\033[0m'+str(self.cnt_list[0]))
                 print( '\033[32m'+'左車輪の速度: '+'\033[0m'+str(self.cnt_list[1]))
-                l_cnv_dutycycle = self.calculate_duty_cicle(target_vel)
+                # l_cnv_dutycycle = self.calculate_duty_cicle(target_vel)
                 r_cnv_dutycycle = self.calculate_duty_cicle(target_vel)
+                # pi.hardware_PWM(self.l_pwm_pin, freq, l_cnv_dutycycle)
                 pi.hardware_PWM(self.r_pwm_pin, freq, r_cnv_dutycycle)
-                pi.hardware_PWM(self.l_pwm_pin, freq, l_cnv_dutycycle)
                 time.sleep(dt)
         finally:
             pi.hardware_PWM(self.r_pwm_pin, freq, 0)
