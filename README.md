@@ -1,10 +1,10 @@
 # 収穫サポートロボット「TANG」
 [CuGo V3](https://cuborex.com/cugo)を使った収穫サポートロボットTANG 
-<img width="400" src="doc/images/tang.png">
+<img width="400" src="doc/images/tang.png">  
 
-開発背景などの詳細はロボゼミでの[発表スライド](https://docs.google.com/presentation/d/1ee6lWTKakHZedKpi5SkKf4kFQXAP9l1Z/edit#slide=id.p1)をご確認ください
+開発背景などの詳細はロボゼミでの[発表スライド](https://docs.google.com/presentation/d/1ee6lWTKakHZedKpi5SkKf4kFQXAP9l1Z/edit#slide=id.p1)をご確認ください  
 
-<img width="600" src="doc/images/abst.png">
+<img width="600" src="doc/images/abst.png">  
 
 ## 使用した主な部品
 - 足回り
