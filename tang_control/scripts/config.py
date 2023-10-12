@@ -4,8 +4,8 @@
 class Pin:
     r_direction = 18
     l_direction = 17
-    teleop_mode = 21
-    follow_mode = 16
+    teleop_mode = 16
+    follow_mode = 21
     r_pwm = 13
     l_pwm = 12
     vrx_channel = 0
