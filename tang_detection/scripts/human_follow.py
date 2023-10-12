@@ -169,7 +169,8 @@ class HumanFollower():
                 dismiss_human_time = 0.0
                 depth_image = np.asanyarray(depth_frame.get_data())
                 roi_depth = depth_image[human_info.detected_bbox.top:human_info.detected_bbox.bottom, human_info.detected_bbox.left:human_info.detected_bbox.right]
-                min_depth_index = np.unravel_index(np.argmin(roi_depth, axis=None), roi_depth.shape)
+                valid_depth = roi_depth[roi_depth > 0]
+                min_depth_index = np.unravel_index(np.argmin(valid_depth, axis=None), roi_depth.shape)
                 # ROIは相対的な位置しか出力しないため、leftやtopを足し合わせる
                 min_depth_point = (human_info.detected_bbox.left + min_depth_index[1], human_info.detected_bbox.top + min_depth_index[0]) 
                 human_point_pixel.z = depth_frame.get_distance(int(min_depth_point[0]), int(min_depth_point[1]))
