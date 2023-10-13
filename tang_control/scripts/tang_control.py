@@ -15,10 +15,10 @@ class TangController():
         self.pi = pigpio.pi()
         # モードのGPIOピン
         self.pi.set_mode(Pin.teleop_mode, pigpio.INPUT)
-        self.pi.set_mode(Pin.follow_mode, pigpio.INPUT)
+        # self.pi.set_mode(Pin.follow_mode, pigpio.INPUT)
         self.pi.set_mode(Pin.emergency_mode, pigpio.INPUT)
         self.pi.callback(Pin.teleop_mode, pigpio.FALLING_EDGE, self.switch_on_callback)
-        self.pi.callback(Pin.follow_mode, pigpio.FALLING_EDGE, self.switch_on_callback)
+        # self.pi.callback(Pin.follow_mode, pigpio.FALLING_EDGE, self.switch_on_callback)
         self.pi.callback(Pin.emergency_mode, pigpio.EITHER_EDGE, self.emergency_button_callback)
         # HumanInfo.msg
         self.human_info = HumanInfo()
@@ -38,28 +38,33 @@ class TangController():
         # 前回のモード
         self.prev_mode = 0
         # 緊急停止時の設定
-        self.debounce_time_micros = 200000  # 0.2秒 = 200,000マイクロ秒
-        self.last_tick = 0
+        self.debounce_time_micros_emergency = 200000  # 0.2秒 = 200,000マイクロ秒
+        self.debounce_time_micros_mode = 2000000
+        self.last_tick_emergency= 0
+        self.last_tick_mode= 0
     
     def switch_on_callback(self, gpio, level, tick):
         # ピンの値を読み取る(HIGH or LOWの1 or 0)
-        if(gpio == Pin.teleop_mode and level == 0): 
-            self.tang_teleop.mode = 0
-            print("Manual",gpio)
-        if(gpio == Pin.follow_mode and level == 0): 
-            self.tang_teleop.mode = 1
-            print("--Human",gpio)
+        if pigpio.tickDiff(self.last_tick_mode, tick) >= self.debounce_time_micros_mode:
+            if(gpio == Pin.teleop_mode and level == 0): 
+                if self.tang_teleop.mode == 0:
+                    self.tang_teleop.mode = 1
+                    print("Auto",gpio)
+                elif self.tang_teleop.mode == 1:
+                    self.tang_teleop.mode = 0
+                    print("Manual",gpio)
+            self.last_tick_mode = tick
         return
     
     def emergency_button_callback(self, gpio, level, tick):
-        if pigpio.tickDiff(self.last_tick, tick) >= self.debounce_time_micros:
+        if pigpio.tickDiff(self.last_tick_emergency, tick) >= self.debounce_time_micros_emergency:
             if(gpio == Pin.emergency_mode and level == 1):
                 print(f"緊急停止モード: {gpio}, {level}")
                 self.stop_control()
             if(gpio == Pin.emergency_mode and level == 0):
                 print(f"緊急停止モード解除: {gpio}, {level}")
                 self.tang_teleop.mode = 1
-            self.last_tick = tick
+            self.last_tick_emergency = tick
         return
 
     def cmd_callback(self, msg):

@@ -11,8 +11,8 @@ class Pin:
     direction_r = 17
     pwm_r        = 12
     teleop_mode = 21
-    follow_mode = 16
-    emergency_mode = 26
+    # follow_mode = 16
+    emergency_mode = 16
 
 class FOLLOWPID:
     p_gain = 0.002
@@ -43,7 +43,7 @@ class Control:
     # 入力電圧
     input_v = 24
     # 最大角速度
-    max_w = 0.5
+    max_w = 0.3
     # 最大速度
     max_velocity = 0.2
     # 目標角速度
