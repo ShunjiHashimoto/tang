@@ -25,6 +25,8 @@ class PID:
     Ki = 0.01
     Kd = 0.00
     dt = 0.005 # 0.0001がmax
+    max_error_sum_v = 10
+    max_error_sum_w = 50
     
 class PWM:
     # PWM周波数をHzで指定
@@ -43,7 +45,7 @@ class Control:
     # 入力電圧
     input_v = 24
     # 最大角速度
-    max_w = 0.3
+    max_w = 0.4
     # 最大速度
     max_velocity = 0.2
     # 目標角速度

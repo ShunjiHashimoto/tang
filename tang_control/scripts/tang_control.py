@@ -137,6 +137,7 @@ class TangController():
         if(abs(w_target) > Control.max_w):
             if w_target<0: w_target = -Control.max_w
             if w_target>0: w_target = Control.max_w
+        print(f"w_target: {w_target}")
         self.motor.run(v_target, w_target, Control.a_target, Control.alpha_target)
         return
     

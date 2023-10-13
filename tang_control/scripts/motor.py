@@ -72,14 +72,18 @@ class Motor:
     def pid_control(self, v_curr, w_curr, v_target, w_target, dt):
         error_v  = v_target - v_curr
         error_w  = w_target - w_curr
-        if(error_v < 0): error_v = error_v/3
+        if(error_v < 0): error_v = error_v
         pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
         pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
-        print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{(error_v - self.prev_error['v'])}\033[0m")
+        print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum_v: {self.error_sum['v']:.3f}, error_sum_w: {self.error_sum['w']:.3f}\033[0m")
         self.error_sum['v'] += error_v
         self.error_sum['w'] += error_w
         self.prev_error['v'] = error_v
         self.prev_error['w'] = error_w
+        if self.error_sum['v'] > PID.max_error_sum_v: self.error_sum['v'] = PID.max_error_sum_v
+        if abs(self.error_sum['w']) > PID.max_error_sum_w: 
+            if self.error_sum['w'] > 0: self.error_sum['w'] = PID.max_error_sum_w
+            if self.error_sum['w'] < 0: self.error_sum['w'] = -PID.max_error_sum_w
         return pid_error_v, pid_error_w
     
     def calc_target_w_i(self, v_target, w_target, a_target, alpha_target, dt):
