@@ -6,13 +6,16 @@ import datetime
 import math
 import numpy as np
 from geometry_msgs.msg import Point
-from tang_msgs.msg import HumanInfo, Modechange, IsDismiss
+from tang_msgs.msg import HumanInfo, Modechange, IsDismiss, Emergency
 from config import CameraConfig, HumanDetectionConfig
 import jetson_utils
 import rospy
 import roslib.packages
 import pyrealsense2 as rs
 import human_detection
+import Jetson.GPIO as GPIO
+GPIO.setmode(GPIO.BOARD)
+emergency_mode_pin = 37
 
 class RealSenseCamera():
     def __init__(self):
@@ -29,6 +32,7 @@ class RealSenseCamera():
         self.config.enable_stream(rs.stream.depth, CameraConfig.WIDTH , CameraConfig.HEIGHT, rs.format.z16, 30)
         self.config.enable_stream(rs.stream.accel)
         self.config.enable_stream(rs.stream.gyro)
+        GPIO.setup(emergency_mode_pin, GPIO.IN)
     
     def start(self):
         self.profile = self.pipeline.start(self.config)
@@ -98,6 +102,7 @@ class HumanFollower():
         # publisher
         self.cmd_publisher = rospy.Publisher('tang_cmd', HumanInfo, queue_size=1)
         self.is_dismiss_publisher = rospy.Publisher('is_dismiss', IsDismiss, queue_size=1)
+        self.emergency_btn_publisher = rospy.Publisher('emergency', Emergency, queue_size=1)
         self.is_dismiss = IsDismiss()
         # subscriber
         rospy.Subscriber("current_param", Modechange, self.mode_change_callback, queue_size=1)
@@ -154,6 +159,13 @@ class HumanFollower():
         rospy.loginfo("Start Human Detection!")
 
         while not rospy.is_shutdown():
+            pin_val = GPIO.input(emergency_mode_pin)
+            if pin_val == 0: 
+                print("非常停止モード")
+                emergency_output = Emergency()
+                emergency_output.is_emergency = True
+                self.emergency_btn_publisher.publish(emergency_output)
+                continue
             self.is_dismiss.flag = False
             frame, depth_frame = self.real_sense_camera.get_frame()
             if not frame.any(): print("frame Nothing")
