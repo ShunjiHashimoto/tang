@@ -16,6 +16,7 @@ import human_detection
 import Jetson.GPIO as GPIO
 GPIO.setmode(GPIO.BOARD)
 emergency_mode_pin = 37
+GPIO.setup(emergency_mode_pin, GPIO.IN)
 
 class RealSenseCamera():
     def __init__(self):
@@ -32,7 +33,6 @@ class RealSenseCamera():
         self.config.enable_stream(rs.stream.depth, CameraConfig.WIDTH , CameraConfig.HEIGHT, rs.format.z16, 30)
         self.config.enable_stream(rs.stream.accel)
         self.config.enable_stream(rs.stream.gyro)
-        GPIO.setup(emergency_mode_pin, GPIO.IN)
     
     def start(self):
         self.profile = self.pipeline.start(self.config)
@@ -120,6 +120,8 @@ class HumanFollower():
         self.human_detector = human_detection.HumanDetector()
         self.result_displayer = ResultDisplayer(self.human_detector.net)
         self.prev_human_point_pixel_z = 0.0
+        # Emergency
+        self.prev_pin_val = None
     
     def mode_change_callback(self, msg):
         self.current_mode = msg
@@ -161,16 +163,19 @@ class HumanFollower():
 
         while not rospy.is_shutdown():
             pin_val = GPIO.input(emergency_mode_pin)
+            if self.prev_pin_val == 1 and pin_val == 1: continue
             if pin_val == 1: 
-                print("非常停止モード")
                 emergency_output = Emergency()
                 emergency_output.is_emergency = True
                 self.emergency_btn_publisher.publish(emergency_output)
+                self.prev_pin_val = 1
+                print("緊急停止モード")
                 continue
             else:
                 emergency_output = Emergency()
                 emergency_output.is_emergency = False
                 self.emergency_btn_publisher.publish(emergency_output)
+                self.prev_pin_val = 0
             self.is_dismiss.flag = False
             frame, depth_frame = self.real_sense_camera.get_frame()
             if not frame.any(): print("frame Nothing")
