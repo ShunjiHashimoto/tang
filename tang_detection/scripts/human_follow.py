@@ -119,6 +119,7 @@ class HumanFollower():
         # HumanDetector
         self.human_detector = human_detection.HumanDetector()
         self.result_displayer = ResultDisplayer(self.human_detector.net)
+        self.prev_human_point_pixel_z = 0.0
     
     def mode_change_callback(self, msg):
         self.current_mode = msg
@@ -160,12 +161,16 @@ class HumanFollower():
 
         while not rospy.is_shutdown():
             pin_val = GPIO.input(emergency_mode_pin)
-            if pin_val == 0: 
+            if pin_val == 1: 
                 print("非常停止モード")
                 emergency_output = Emergency()
                 emergency_output.is_emergency = True
                 self.emergency_btn_publisher.publish(emergency_output)
                 continue
+            else:
+                emergency_output = Emergency()
+                emergency_output.is_emergency = False
+                self.emergency_btn_publisher.publish(emergency_output)
             self.is_dismiss.flag = False
             frame, depth_frame = self.real_sense_camera.get_frame()
             if not frame.any(): print("frame Nothing")
@@ -181,9 +186,11 @@ class HumanFollower():
                 dismiss_human_time = 0.0
                 depth_image = np.asanyarray(depth_frame.get_data())
                 roi_depth = depth_image[human_info.detected_bbox.top:human_info.detected_bbox.bottom, human_info.detected_bbox.left:human_info.detected_bbox.right]
-                min_depth_index = np.unravel_index(np.argmin(roi_depth, axis=None), roi_depth.shape)
+                # threshold以下の深度を無限大に置き換え
+                valid_depth = np.where(roi_depth > HumanDetectionConfig.min_depth_threshold, roi_depth, np.inf)
+                min_depth_index = np.unravel_index(np.argmin(valid_depth, axis=None), valid_depth.shape)
                 # ROIは相対的な位置しか出力しないため、leftやtopを足し合わせる
-                min_depth_point = (human_info.detected_bbox.left + min_depth_index[1], human_info.detected_bbox.top + min_depth_index[0]) 
+                min_depth_point = (human_info.detected_bbox.left + min_depth_index[1], human_info.detected_bbox.top + min_depth_index[0])
                 human_point_pixel.z = depth_frame.get_distance(int(min_depth_point[0]), int(min_depth_point[1]))
                 human_input = self.calc_human_input(color_intr, human_point_pixel, delta_t)
                 human_info.human_point.x = human_input[0]
@@ -200,7 +207,7 @@ class HumanFollower():
             self.is_dismiss.flag = False
             self.is_dismiss_publisher.publish(self.is_dismiss)
             self.cmd_publisher.publish(human_info)
-            rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", human_info.human_point.x, human_info.human_point.y, human_info.human_point.z)
+            # rospy.loginfo("human_input: x:%lf, y:%lf, z:%lf", human_info.human_point.x, human_info.human_point.y, human_info.human_point.z)
             if (self.debug): 
                 self.result_displayer.display_inference_result(cuda_mem, human_point_pixel, delta_t)
 

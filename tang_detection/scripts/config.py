@@ -29,3 +29,5 @@ class HumanDetectionConfig:
     model = "ssd-mobilenet-v2"
     # 人を見失ったときにロボットが止まるまでの時間
     dismiss_time_thresh = 1.0
+    # depth画像の中で採用する最小のdepth
+    min_depth_threshold = 0.05
