@@ -11,16 +11,24 @@
   - [CuGo V3](https://cuborex.com/cugo)
 - カメラ
   - [Webカメラ](https://amzn.asia/d/0IFd8t9)
-    - 視野角 150°
-    - 200万画素
-- 制御用PC
-  - Raspberry Pi 4（Ubuntu 20.04, ROS 1, noetic）
+    - スペック
+      - 視野角 150°
+      - 200万画素
+- 制御PC
+  - [Raspberry Pi 4](https://www.raspberrypi.com/products/raspberry-pi-4-model-b/) 
+    - OS
+      - Xbuntu 20.04
+    - Framework
+      - ROS 1, noetic
 - モータドライバ
   - [Cytron SmartDriveDuo 10A](https://www.cytron.io/p-10amp-5v-30v-dc-motor-driver-2-channels)
 - 電源
   - モータ駆動用電源 24V
-  - 制御用電源
-    - モバイルバッテリ（5V, 3A出力）
+    - [完全密封型鉛蓄電池　１２Ｖ５Ａｈ](https://akizukidenshi.com/catalog/g/gB-00940/)
+  - 制御PC RaspberryPi用電源 5V, 3A出力
+    - [Anker PowerCore 10000 PD Redux 25W](https://www.ankerjapan.com/products/a1246)
+- 遠隔操作用Joystick
+  - Logicool
 
 ## SetUp
 ### 【制御用PC】Raspberry Pi 4
@@ -168,5 +176,13 @@ $ roslaunch tang_bringup tang_bringup.launch
 $ roslaunch tang_detection tang_detection.launch
 ```
 
+## 自動起動方法
+自動起動は、制御ボックス内のスイッチボタンを押すことで自動でROSノードが起動するように設定されています。  
+自動起動用のシェルスクリプトは、
+```bash
+~/ros1_ws/src/tang/.shellscripts/bringup_raspi.sh
+```
+に書かれています。このシェルスクリプトを制御PC Raspberry Piが起動時に実行するように登録します。  
+登録方法は、まずUbuntu Dockで"自動起動"と検索し、表示された"自動起動するアプリケーション"を起動します。起動後に、自動起動するスクリプトでbringuup_raspi.shを選択することで、登録することができます。  
 ## ライセンス
 [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
