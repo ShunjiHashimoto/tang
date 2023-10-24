@@ -28,7 +28,7 @@
   - 制御PC RaspberryPi用電源 5V, 3A出力
     - [Anker PowerCore 10000 PD Redux 25W](https://www.ankerjapan.com/products/a1246)
 - 遠隔操作用Joystick
-  - Logicool
+  - [Logicool F710 Wireless Gamepad](https://gaming.logicool.co.jp/ja-jp/products/gamepads/f710-wireless-gamepad.940-000144.html)
 
 ## SetUp
 ### 【制御PC】Raspberry Pi 4
@@ -61,7 +61,7 @@ $ pip3 install rospkg catkin_pkg
 $ sudo apt install python3-pip  
 ```
 
-#### Install Opencv
+#### Install OpenCV
 OpenCVは画像処理機能をまとめたオープンソースのライブラリです。
 今回の場合は、カメラ画像を取得したり、得られた画像をもとに画像処理を行い、色検出を行うために使用します。
 ```bash
@@ -95,7 +95,7 @@ $ sudo apt-get install ros-noetic-joy
 VSCodeの拡張機能で"Remote SSH"を検索し、インストール  
 <img width="400" src="doc/images/remote_ssh1.png">  
 インストール後は、VSCodeを再起動し、下記画像の赤枠に示されたアイコンをクリックする  
-<img width="400" src="doc/images/remote_ssh2.png">
+<img width="400" src="doc/images/remote_ssh2.png">  
 sshはubuntu@"IPアドレス"を入力し、その後パスワードも入力する  
 IPアドレスは制御PCであるRaspberry PiのIPアドレスを調べて入力する  
 
@@ -215,6 +215,7 @@ $ roslaunch tang_detection tang_detection.launch
 ~/ros1_ws/src/tang/.shellscripts/bringup_raspi.sh
 ```
 に書かれています。このシェルスクリプトを制御PC Raspberry Piが起動時に実行するように登録します。  
-登録方法は、まずUbuntu Dockで"自動起動"と検索し、表示された"自動起動するアプリケーション"を起動します。起動後に、自動起動するスクリプトでbringuup_raspi.shを選択することで、登録することができます。  
+登録方法は、まずUbuntu Dockで"Startup"と検索し、表示された"Startup Application"を起動します。起動後に、下記画像の"tang_bringup"を選択し、自動起動するスクリプトでbringuup_raspi.shを選択することで、登録することができます。  
+<img width="400" src="doc/images/auto_startup.png">  
 ## ライセンス
 [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
