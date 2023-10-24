@@ -53,7 +53,7 @@ class DetectColorObject():
     def calc_mask(self, hsv):
         # 緑色のHSVの値域
         hsv_min = np.array([ColorObjectParam.hue_min, ColorObjectParam.sat_min, ColorObjectParam.val_min]) 
-        hsv_max = np.array([ColorObjectParam.hue_max, ColorObjectParam.sat_min, ColorObjectParam.val_max])
+        hsv_max = np.array([ColorObjectParam.hue_max, ColorObjectParam.sat_max, ColorObjectParam.val_max])
         # 緑色領域のマスク
         mask = cv2.inRange(hsv, hsv_min, hsv_max)
         return(mask)
@@ -74,7 +74,6 @@ class DetectColorObject():
         try:
             max_index = np.argmax(data[:, 4]) 
         except ValueError:
-            print("ValueError")
             maxblob["area"] = 0
             maxblob["center"] = [0, 0]
             maxblob["width"] = 0
@@ -135,10 +134,9 @@ class DetectColorObject():
             # 人を見失った場合は停止する
             if(maxblob["area"] < ColorObjectParam.object_min_area):
                 dismiss_human_time += delta_t
-                print(f"dismiss_human_time : {dismiss_human_time }")
                 if dismiss_human_time > HumanFollowParam.dismiss_time:
                     self.human_info.is_human = 0
-                    rospy.loginfo("Dissmiss human : %lf", dismiss_human_time)
+                    # rospy.loginfo("Dismiss human : %lf", dismiss_human_time)
                     self.is_dismiss.flag = True
                     self.is_dismiss_publisher.publish(self.is_dismiss)
                     continue
