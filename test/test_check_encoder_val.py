@@ -74,8 +74,8 @@ class Motor:
         dt = 0.00011
         try:
             while (self.cnt_list[0] <= 2030*2):
-                print( '\033[31m'+'右車輪の速度: '+'\033[0m'+str(self.cnt_list[0]))
-                print( '\033[32m'+'左車輪の速度: '+'\033[0m'+str(self.cnt_list[1]))
+                print( '\033[31m'+'右車輪のエンコーダ値: '+'\033[0m'+str(self.cnt_list[0]))
+                print( '\033[32m'+'左車輪のエンコーダ値: '+'\033[0m'+str(self.cnt_list[1]))
                 l_cnv_dutycycle = self.calculate_duty_cicle(target_vel)
                 r_cnv_dutycycle = self.calculate_duty_cicle(target_vel)
                 pi.hardware_PWM(self.r_pwm_pin, freq, r_cnv_dutycycle)

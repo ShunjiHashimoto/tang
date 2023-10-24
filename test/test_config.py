@@ -42,9 +42,9 @@ class Control:
     # 入力電圧
     input_v = 24
     # 目標角速度
-    w_target = 0.2
+    w_target = 0.01
     # 目標速度
-    v_target = 0.4
+    v_target = 0.2
     # 目標加速度
     a_target = 0.01
     # 目標角加速度

@@ -79,7 +79,6 @@ class Motor:
         if(error_v < 0): error_v = error_v
         pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
         pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
-        print(f"\033[91mpid_error_v: {pid_error_v:.3f}, PID.Kp*error_v：{PID.Kp*error_v}, PID.Ki*self.error_sum['v']：{PID.Ki*self.error_sum['v']}, PID.Kd*(error_v - self.prev_error['v'])/dt：{PID.Kd*(error_v - self.prev_error['v'])/dt:.3f}\033[0m")
         # print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{Control.v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{PID.Kd*(error_w - self.prev_error['w'])/dt:.3f}\033[0m")
         self.error_sum['v'] += error_v
         self.error_sum['w'] += error_w
@@ -99,7 +98,6 @@ class Motor:
         self.prev_encoder_values['l'] = self.encoder_values['l']
         # PID制御
         pid_error_v, pid_error_w = self.pid_control(v_est, w_est, dt)
-        print(f"\033[91m車体の推定目標速度: {v_est + pid_error_v}\033[0m")
         # 各モータの角速度
         w_r = (1/Control.wheel_r)*(v_est + pid_error_v) + (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
         w_l = (1/Control.wheel_r)*(v_est + pid_error_v) - (Control.tread_w/(2*Control.wheel_r)*(Control.w_target + pid_error_w))
@@ -160,7 +158,7 @@ class Motor:
                 # 0.01秒周期でモータに指令を送る
                 if(current_time - self.prev_time_for_pwm > 0.01):
                     self.motor_control(w_r, w_l, i_r, i_l)
-                    print(f"self.encoder_values['l']: {self.encoder_values['l']}")
+                    # print(f"self.encoder_values['l']: {self.encoder_values['l']}")
                 time.sleep(PID.dt)
         finally:
             self.pwm_control(Pin.pwm_r, 0)
