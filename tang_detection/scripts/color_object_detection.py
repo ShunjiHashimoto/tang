@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# 赤色の物体を検出し、追従する
+# 若草色の物体を検出し、追従する
 
 import sys
 import numpy as np
@@ -11,8 +11,8 @@ import cv2
 # ros
 import rospy
 from tang_msgs.msg import HumanInfo, IsDismiss
-
-window_name = 'color object detection'
+# param
+from config import ColorObjectParam, CameraParam, HumanFollowParam
 
 class DetectColorObject():
     def __init__(self):
@@ -26,19 +26,19 @@ class DetectColorObject():
         # camera
         self.video = cv2.VideoCapture(0)
         self.video.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M','J','P','G'))
-        self.video.set(cv2.CAP_PROP_FPS, 30)           # カメラFPSを30FPSに設定
-        self.video.set(cv2.CAP_PROP_FRAME_WIDTH, 1280) # カメラ画像の横幅を1280に設定
-        self.video.set(cv2.CAP_PROP_FRAME_HEIGHT, 720) # カメラ画像の縦幅を720に設定
+        self.video.set(cv2.CAP_PROP_FPS, CameraParam.fps)
+        self.video.set(cv2.CAP_PROP_FRAME_WIDTH, CameraParam.width) 
+        self.video.set(cv2.CAP_PROP_FRAME_HEIGHT, CameraParam.height)
         fourcc = self.decode_fourcc(self.video.get(cv2.CAP_PROP_FOURCC))
         width = self.video.get(cv2.CAP_PROP_FRAME_WIDTH)
         height = self.video.get(cv2.CAP_PROP_FRAME_HEIGHT)
         fps = self.video.get(cv2.CAP_PROP_FPS)
         print("fourcc:{} fps:{} width:{} height:{}".format(fourcc, fps, width, height))
         if not self.video.isOpened(): sys.exit()
+        # process time
+        self.prev_time = 0.0
         # rosparam
         self.debug = rospy.get_param("/tang_detection/debug")
-        self.object_min_area = rospy.get_param("/tang_detection/object_min_area")
-        self.prev_time = 0.0
     
     def decode_fourcc(self, v):
         v = int(v)
@@ -50,24 +50,13 @@ class DetectColorObject():
         self.prev_time = now
         return delta_t
 
-    # def calc_mask(self, hsv):
-    #     # 緑色のHSVの値域
-    #     hsv_min = np.array([30,120,0]) 
-    #     hsv_max = np.array([80,255,255])
-    #     # 緑色領域のマスク
-    #     mask = cv2.inRange(hsv, hsv_min, hsv_max)  
-    #     return(mask)
     def calc_mask(self, hsv):
-        # 赤色のHSVの値域1
-        hsv_min = np.array([1,128,0]) # 赤色の小さい値を除去
-        hsv_max = np.array([6,255,255])
-        mask1 = cv2.inRange(hsv, hsv_min, hsv_max)
-        # 赤色のHSVの値域2
-        hsv_min = np.array([150,200,0])
-        hsv_max = np.array([179,255,255])
-        mask2 = cv2.inRange(hsv, hsv_min, hsv_max)
-        # 赤色領域のマスク（255：赤色、0：赤色以外）    
-        return(mask1 + mask2)
+        # 緑色のHSVの値域
+        hsv_min = np.array([ColorObjectParam.hue_min, ColorObjectParam.sat_min, ColorObjectParam.val_min]) 
+        hsv_max = np.array([ColorObjectParam.hue_max, ColorObjectParam.sat_min, ColorObjectParam.val_max])
+        # 緑色領域のマスク
+        mask = cv2.inRange(hsv, hsv_min, hsv_max)
+        return(mask)
         
     # ブロブ解析
     def analysis_blob(self, binary_img):
@@ -85,7 +74,7 @@ class DetectColorObject():
         try:
             max_index = np.argmax(data[:, 4]) 
         except ValueError:
-            # print("ValueError")
+            print("ValueError")
             maxblob["area"] = 0
             maxblob["center"] = [0, 0]
             maxblob["width"] = 0
@@ -111,20 +100,13 @@ class DetectColorObject():
 
     def detect_color_object(self):
         dismiss_human_time = 0.0
-        all_time = 0.0
         delta_t = self.calc_delta_time()
-        delta_t = self.calc_delta_time()
-        process_num = 0
         ret, frame = self.video.read()
         while not rospy.is_shutdown():
             self.is_dismiss.flag = False
             delta_t = self.calc_delta_time()
-            process_num += 1
-            all_time += delta_t
-            print(f"{process_num/all_time}fps")
             # カメラの画像を１フレーム読み込み、frameに格納、retは読み込めたらtrueを格納する
             ret, frame = self.video.read()
-            # image_height: 480, image_width: 640
             image_height, image_width = frame.shape[:2]
             frame = cv2.resize(frame , (int(image_width*1.0), int(image_height*1.0)))
             if(not ret):  break
@@ -132,23 +114,29 @@ class DetectColorObject():
 
             hsv = cv2.cvtColor(target_img, cv2.COLOR_BGR2HSV)
             mask = self.calc_mask(hsv)
-            h = hsv[:, :, 0] # ０列目の列をすべて抽出、この場合hだけを抽出
-            # S, Vを2値化（大津の手法）
-            ret, s = cv2.threshold(hsv[:, :, 1], 0, 255,
-                                cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 1列目を抽出(s値)
-            ret, v = cv2.threshold(hsv[:, :, 2], 0, 255,
-                                cv2.THRESH_BINARY | cv2.THRESH_OTSU) # 2列目を抽出(v値)
-                # s,vどちらかが0であれば、そのh[]の値を100にする、つまり赤色ではない色
-                # hの配列の中でTrueになった箇所だけを操作する
+            # HSV画像からH(色相)成分を抽出
+            h = hsv[:, :, 0]
+
+            # S(彩度)成分を二値化（大津の手法を利用して最適な閾値で二値化）
+            # この操作で彩度の低い部分と高い部分が分けられる
+            ret, s = cv2.threshold(hsv[:, :, 1], 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+            # V(明度)成分も同様に二値化
+            # この操作で明るい部分と暗い部分が分けられる
+            ret, v = cv2.threshold(hsv[:, :, 2], 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+            # SまたはVの二値化画像で0(黒)と判定された部分は、色の情報が不足していると判断
+            # これは、彩度が低すぎる、または明度が低すぎるため、その部分の色相Hを100にして識別しやすくする
+            # 100という値は、対象とは異なる色を示す目印として使用される（任意の値で良い）
             h[(s == 0) | (v == 0)] = 100
 
             # マスク画像をブロブ解析（面積最大のブロブ情報を取得）
             maxblob = self.analysis_blob(mask)
             # 人を見失った場合は停止する
-            if(maxblob["area"] < self.object_min_area):
+            if(maxblob["area"] < ColorObjectParam.object_min_area):
                 dismiss_human_time += delta_t
                 print(f"dismiss_human_time : {dismiss_human_time }")
-                if dismiss_human_time > 0.5:
+                if dismiss_human_time > HumanFollowParam.dismiss_time:
                     self.human_info.is_human = 0
                     rospy.loginfo("Dissmiss human : %lf", dismiss_human_time)
                     self.is_dismiss.flag = True
@@ -164,11 +152,11 @@ class DetectColorObject():
             # フレームに面積最大ブロブの中心周囲を円で描く
             cv2.circle(target_img, (self.human_info.human_point.y, self.human_info.human_point.z), self.human_info.max_area, (0, 200, 0),thickness=2, lineType=cv2.LINE_AA)
             cv2.circle(target_img, (self.human_info.human_point.y, self.human_info.human_point.z), 1, (255, 0, 0),thickness=2, lineType=cv2.LINE_AA)
-            print(f"max area: {self.human_info.max_area}")
+            print(f"target object max area: {self.human_info.max_area}")
             # 動画表示
             if ret:
                 if(self.debug):
-                    cv2.imshow(window_name, target_img)
+                    cv2.imshow(CameraParam.window_name, target_img)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             else:
@@ -180,4 +168,4 @@ if __name__ == "__main__":
     detect_color_object.detect_color_object()
     rospy.spin()
     detect_color_object.video.release()
-    cv2.destroyWindow(window_name)
+    cv2.destroyWindow(CameraParam.window_name)
