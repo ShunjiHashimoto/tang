@@ -8,10 +8,15 @@ class TangTeleop():
     def __init__(self):
         self.btn = 0
         self.mode = 1
+        self.demo_mode = 0
         self.joy_l = 0
         self.joy_r = 0
         self.percent = 50
-        self.BTN_BACK = 0x0100
+        # 2進数に変換すると、
+        # 0x0100 = 0000 0001 0000 0000 (2進数)
+        self.BTN_BACK = 0x0100 
+        # 0x0080 = 0000 0001 1000 0000 (2進数)
+        self.BTN_START = 0x0080
         self.BTN_Y = 0x0001
         self.BTN_A = 0x0002
         self.AXS_MAX = 1.0
@@ -32,6 +37,8 @@ class TangTeleop():
         
         if(joy_msg.buttons[8]):
             newbtn |= self.BTN_BACK
+        elif(joy_msg.buttons[9]):
+            newbtn |= self.BTN_START
         elif(joy_msg.buttons[1]):
             newbtn |= self.BTN_A
         elif(joy_msg.buttons[3]):
@@ -59,7 +66,10 @@ class TangTeleop():
         push = ((~self.btn) & newbtn)
         self.btn = newbtn
         if(push & self.BTN_BACK):
+            self.demo_mode = 0
             self.mode = (self.mode + 1)%2
+        elif(push & self.BTN_START):
+            self.demo_mode = 1
         elif(push & self.BTN_Y):
             self.percent += 10
         elif(push & self.BTN_A):
