@@ -22,7 +22,7 @@ class ColorObjectParam:
     val_min = 0
     val_max = 255
     # 追跡対象としてみなす領域の最小値
-    object_min_area =100
+    object_min_area = 100
     
 class HumanFollowParam:
     # 対象を見失ってから停止指令を送るまでの時間
