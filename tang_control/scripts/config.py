@@ -25,8 +25,8 @@ class PID:
     Ki = 0.01
     Kd = 0.00
     dt = 0.005 # 0.0001がmax
-    max_error_sum_v = 10
-    max_error_sum_w = 50
+    max_error_sum_v = 2
+    max_error_sum_w = 2
     
 class PWM:
     # PWM周波数をHzで指定
@@ -45,9 +45,9 @@ class Control:
     # 入力電圧
     input_v = 24
     # 最大角速度
-    max_w = 0.4
+    max_w = 0.8
     # 最大速度
-    max_velocity = 0.2
+    max_velocity = 0.8
     # 目標角速度
     w_target = 0.2
     # 目標速度
@@ -55,7 +55,7 @@ class Control:
     # 目標加速度
     a_target = 0.01
     # 目標減速加速度
-    d_target = -0.01
+    d_target = -0.1
     # 目標角加速度
     alpha_target = 0.01
     # 逆起電圧定数
@@ -85,7 +85,9 @@ class Control:
     J = M*(0.22*0.22 + 0.2*0.2)/3
     
 class HumanFollowParam:
-    min_area_thresh = 70
-    max_area_thresh = 250
+    # 対象物が小さい場合は追従しないためのパラメータ
+    min_area_thresh = 40
+    # 対象物の大きさに応じて速度を変更するためのパラーメタ
+    max_area_thresh = 300
     # 画像中心のx座標
     image_center = 1280/2
