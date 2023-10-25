@@ -10,8 +10,6 @@ class Pin:
     encoder_r_B  = 27
     direction_r = 17
     pwm_r        = 12
-    teleop_mode = 21
-    # follow_mode = 16
     emergency_mode = 16
 
 class FOLLOWPID:
