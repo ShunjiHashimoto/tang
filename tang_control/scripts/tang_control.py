@@ -38,6 +38,8 @@ class TangController():
         self.last_tick_emergency= 0
         self.last_tick_mode= 0
         self.prev_target_pos_y = 0.0
+        self.demo_prev_time = time.time()
+        self.demo_mode_now = 0
     
     def emergency_button_callback(self, gpio, level, tick):
         if pigpio.tickDiff(self.last_tick_emergency, tick) >= self.debounce_time_micros_emergency:
@@ -129,9 +131,17 @@ class TangController():
         return
     
     def demo_control(self):
-        w_target = 1.5
         v_target = 0.0
-        self.motor.run(v_target, w_target, Control.a_target, Control.alpha_target)
+        if self.demo_mode_now%2 == 0:
+            w_target = 1.5
+            self.motor.run(v_target, w_target, Control.a_target, Control.alpha_target)
+        elif self.demo_mode_now%2 == 1:
+            w_target = -1.5
+            self.motor.run(v_target, w_target, Control.a_target, Control.alpha_target)
+        end_time = time.time() - self.demo_prev_time
+        if end_time > 2.0:
+            self.demo_mode_now += 1
+            self.demo_prev_time = time.time()
 
     def stop_control(self):
         self.tang_teleop.mode = 99
