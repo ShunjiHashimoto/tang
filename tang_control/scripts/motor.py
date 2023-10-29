@@ -81,6 +81,14 @@ class Motor:
         self.error_sum['w'] += error_w
         self.prev_error['v'] = error_v
         self.prev_error['w'] = error_w
+        if(self.error_sum['v'] > PID.max_error_sum_v): 
+            self.error_sum['v'] = PID.max_error_sum_v
+        if(abs(self.error_sum['w']) > PID.max_error_sum_w):
+            if(self.error_sum['w'] < 0):
+                self.error_sum['w'] = -PID.max_error_sum_w
+            else:
+                self.error_sum['w'] = PID.max_error_sum_w
+                print(f"self.error_sum_w: {self.error_sum['w']}, self.error_sum_v: {self.error_sum['v']}")
         return pid_error_v, pid_error_w
     
     def calc_target_w_i(self, v_target, w_target, a_target, alpha_target, dt):

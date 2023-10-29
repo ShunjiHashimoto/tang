@@ -25,6 +25,7 @@ add_message_files(
   IsDismiss.msg
   BoundingBox.msg
   Emergency.msg
+  ObstacleDistance.msg
 )
 
 ## Generate services in the 'srv' folder

@@ -11,7 +11,7 @@ from config import Pin, PWM, FOLLOWPID, HumanFollowParam, Control
 from motor import Motor
 # ros
 from sensor_msgs.msg import Joy
-from tang_msgs.msg import HumanInfo, Modechange, IsDismiss
+from tang_msgs.msg import HumanInfo, Modechange, IsDismiss, Emergency
 from geometry_msgs.msg import Twist
 
 # spi settings
@@ -32,10 +32,8 @@ class TangController():
         # モードのGPIOピン
         GPIO.setup(Pin.teleop_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
         GPIO.setup(Pin.follow_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-        GPIO.setup(Pin.emergency_mode, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-        GPIO.add_event_detect(Pin.teleop_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
-        GPIO.add_event_detect(Pin.follow_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=250)
-        GPIO.add_event_detect(Pin.emergency_mode, GPIO.FALLING, callback=self.emergency_button_callback, bouncetime=250)
+        GPIO.add_event_detect(Pin.teleop_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=10)
+        GPIO.add_event_detect(Pin.follow_mode, GPIO.FALLING, callback=self.switch_on_callback, bouncetime=10)
         # HumanInfo.msg
         self.human_info = HumanInfo()
         self.cmdvel_from_imu = Twist()
@@ -44,7 +42,7 @@ class TangController():
         self.current_mode.realsense_depth_thresh = 4.0
         self.main = 0
         self.ref_pos = 0.0
-        self.speed = rospy.get_param("/tang_control/speed")
+        self.speed = 0.6
         self.prev_command = 0
         self.command_pwm = 0
         # LCD Display
@@ -53,15 +51,20 @@ class TangController():
         self.motor = Motor()
         self.prev_linear_velocity = 0
         self.prev_angular_velocity = 0
+        self.emergency_prev_btn = None
 
         # subscribe to motor messages on topic "tang_cmd", 追跡対象の位置と大きさ
         self.human_info_sub = rospy.Subscriber('tang_cmd', HumanInfo, self.cmd_callback, queue_size=1)
         self.imu_sub = rospy.Subscriber('cmdvel_from_imu', Twist, self.imu_callback, queue_size=1)
         self.is_dismiss_sub = rospy.Subscriber('is_dismiss', IsDismiss, self.dismiss_callback, queue_size=1)
         self.is_dismiss = IsDismiss()
+        self.is_emergency_sub = rospy.Subscriber('emergency', Emergency, self.emergency_callback, queue_size=1)
+        self.is_emergency = Emergency()
         # publisher, モードと距離の閾値、赤色検出の閾値をpub
         self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
         self.prev_mode = 0
+        # ローパスフィルタ
+        self.alpha = 0.1
     
     def read_analog_pin(self, channel):
         adc = spi.xfer2([1, (8 + channel)<<4, 0])
@@ -84,12 +87,16 @@ class TangController():
         self.mode_pub.publish(self.current_mode)
         return
     
-    def emergency_button_callback(self, gpio):
-        result = GPIO.input(gpio)
-        if(gpio == Pin.emergency_mode and result == 0):
-            print(f"緊急停止モード解除: {gpio}")
+    def emergency_callback(self, msg):
+        if(msg.is_emergency == True):
+            print("緊急停止モード:")
             self.stop_control()
+            self.main = 99
+            self.emergency_prev_btn = True
+        elif(self.emergency_prev_btn == True and msg.is_emergency == False):
+            print("解除")
             self.main = self.prev_mode
+            self.emergency_prev_btn = False
         return
 
     def cmd_callback(self, msg):
@@ -106,20 +113,27 @@ class TangController():
         return
 
     def change_velocity(self, cnt):
-        if(self.speed == 90):
-            self.speed = 30
+        if(self.speed == Control.max_linear_vel_manual):
+            self.speed = 0.3
             cnt = 0
             return cnt
         swt_val = self.read_analog_pin(Pin.swt_channel)
-        if(swt_val > 1010):
+        if(swt_val == 0):
             cnt += 1
             if(cnt > 30):
-                self.speed += 10
+                self.speed += 0.1
                 self.mylcd.lcd_display_string("Speed: " + str(self.speed), 2)
                 cnt = 0
         else:
             cnt = 0
+        Control.max_linear_vel = self.speed
         return cnt
+    
+    def lowpass_filter(self, input_value, prev_value):
+        if prev_value is None:
+            prev_value = input_value
+        output = self.alpha*input_value + (1-self.alpha)*prev_value
+        return output
     
     def nomarilze_speed(self, motor_r, motor_l):
         if(motor_r >= 100): motor_r = 100
@@ -153,7 +167,7 @@ class TangController():
         vrx_pos = self.read_analog_pin(Pin.vrx_channel) / Control.max_joystick_val * 2 - 1  # normalize to [-1, 1]
         vry_pos = self.read_analog_pin(Pin.vry_channel) / Control.max_joystick_val * 2 - 1  # normalize to [-1, 1]
         # Debugging
-        # print("Normalized X : {}  Normalized Y : {} ".format(vrx_pos, vry_pos))
+        print("Normalized X : {}  Normalized Y : {} ".format(vrx_pos, vry_pos))
         # Calculate linear and angular velocity
         linear_velocity = Control.max_linear_vel * max(vry_pos, 0)  # vry_pos negative would mean backward, but we restrict that
         angular_velocity = vrx_pos * Control.max_angular_vel
@@ -162,7 +176,7 @@ class TangController():
             linear_velocity = 0
         if abs(angular_velocity) < Control.velocity_thresh:
             angular_velocity = 0
-        # print(f"linear_velocity{linear_velocity}, angular_velocity{angular_velocity}")
+        print(f"linear_velocity{linear_velocity}, angular_velocity{angular_velocity}")
         # Decide acceleration for linear velocity
         linear_acceleration = Control.a_target
         if linear_velocity == 0:
@@ -204,6 +218,9 @@ class TangController():
             angular_acceleration = -Control.alpha_target
         else:
             angular_acceleration = Control.alpha_target
+        # ローパスフィルタ
+        linear_velocity = self.lowpass_filter(linear_velocity, self.prev_linear_velocity)
+        angular_velocity = self.lowpass_filter(angular_velocity, self.prev_angular_velocity)
         # モータに指令値を送る
         self.motor.run(linear_velocity, angular_velocity, linear_acceleration, angular_acceleration)
         # Update previous velocities
@@ -212,6 +229,7 @@ class TangController():
         return
     
     def change_control_mode(self):
+        if self.main == 99: return
         self.prev_mode = self.main
         if self.main == 0:
             self.manual_control()

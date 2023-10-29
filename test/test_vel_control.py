@@ -31,6 +31,9 @@ class Motor:
         # plt.ylabel("v[m/s]")
         # plt.title("Target v and Current v")
         # plt.ylim(0, 1)
+        self.alpha = 0.1
+        self.prev_linear_velocity = None
+        self.prev_angular_velocity = None
         
     def set_gpio(self):
         self.pi.set_mode(Pin.encoder_r_A, pigpio.INPUT)
@@ -47,7 +50,7 @@ class Motor:
         self.pi.set_pull_up_down(Pin.encoder_l_A, pigpio.PUD_UP)
         self.pi.set_pull_up_down(Pin.encoder_l_B, pigpio.PUD_UP)
         self.pi.callback(Pin.encoder_l_A, pigpio.EITHER_EDGE, self.get_encoder_turn_l) 
-        self.pi.callback(Pin.encoder_l_B, pigpio.EITHER_EDGE, self.get_encoder_turn_l) 
+        self.pi.callback(Pin.encoder_l_B, pigpio.EITHER_EDGE, self.get_encoder_turn_l)
 
     def get_encoder_turn_r(self, gpio, level, tick):
         if gpio == self.last_gpio_r:
@@ -69,6 +72,12 @@ class Motor:
         # 1,000,000で100％
         return int(((duty/100) * 1000000))
     
+    def lowpass_filter(self, input_value, prev_value):
+        if prev_value is None:
+            prev_value = input_value
+        output = self.alpha*input_value + (1-self.alpha)*prev_value
+        return output
+    
     def calc_w(self, encoder_val, prev_encoder_val, dt):
         delta_encoder_val = encoder_val - prev_encoder_val
         return (delta_encoder_val*Control.radian_1encoder_r)/dt
@@ -77,9 +86,9 @@ class Motor:
         error_v  = Control.v_target - v_curr
         error_w  = Control.w_target - w_curr
         if(error_v < 0): error_v = error_v
-        pid_error_v = PID.Kp*error_v + PID.Ki*self.error_sum['v'] + PID.Kd*(error_v - self.prev_error['v'])/dt
-        pid_error_w = PID.Kp*error_w + PID.Ki*self.error_sum['w'] + PID.Kd*(error_w - self.prev_error['w'])/dt
-        print(f"\033[91mpid_error_v: {pid_error_v:.3f}, PID.Kp*error_v：{PID.Kp*error_v}, PID.Ki*self.error_sum['v']：{PID.Ki*self.error_sum['v']}, PID.Kd*(error_v - self.prev_error['v'])/dt：{PID.Kd*(error_v - self.prev_error['v'])/dt:.3f}\033[0m")
+        pid_error_v = PID.Kp_v*error_v + PID.Ki_v*self.error_sum['v'] + PID.Kd_v*(error_v - self.prev_error['v'])/dt
+        pid_error_w = PID.Kp_w*error_w + PID.Ki_w*self.error_sum['w'] + PID.Kd_w*(error_w - self.prev_error['w'])/dt
+        print(f"\033[91mpid_error_v: {pid_error_v:.3f}, PID.Kp*error_v：{PID.Kp_v*error_v}, PID.Ki*self.error_sum['v']：{PID.Ki_v*self.error_sum['v']}, PID.Kd*(error_v - self.prev_error['v'])/dt：{PID.Kd_v*(error_v - self.prev_error['v'])/dt:.3f}\033[0m")
         # print(f"\033[91merror_v: {error_v:.3f}, 目標速度：{Control.v_target}, 現在速度：{v_curr}, 計算後のerror_v: {pid_error_v:.3f}, error_sum: {self.error_sum['v']:.3f}, Dゲインの値{PID.Kd*(error_w - self.prev_error['w'])/dt:.3f}\033[0m")
         self.error_sum['v'] += error_v
         self.error_sum['w'] += error_w
@@ -110,8 +119,8 @@ class Motor:
         i_r = T_r/Control.Kt_r
         i_l = T_l/Control.Kt_l
         # ログ
-        Fig.target_w_data.append(Control.w_target)
-        Fig.target_vel_data.append(Control.v_target)
+        Fig.target_w_data.append(w_target)
+        Fig.target_vel_data.append(v_target)
         Fig.vel_data.append(v_est)
         Fig.w_data.append(w_est)
         return w_r, w_l, i_r, i_l
@@ -155,8 +164,14 @@ class Motor:
                 elapsed_time = datetime.now() - start_time
                 elapsed_seconds = round(float(elapsed_time.total_seconds()), 4)
                 Fig.time_data.append(elapsed_seconds)
+                # ローパスフィルタ
+                v_target = self.lowpass_filter(Control.v_target, self.prev_linear_velocity)
+                w_target = self.lowpass_filter(Control.w_target, self.prev_angular_velocity)
+                self.prev_linear_velocity = v_target
+                self.prev_angular_velocity = w_target
+                print(v_target, w_target)
                 # モータの目標角速度と電流値を計算
-                w_r, w_l, i_r, i_l= self.calc_target_w_i(Control.v_target, Control.w_target, Control.a_target, Control.alpha_target, dt)
+                w_r, w_l, i_r, i_l= self.calc_target_w_i(v_target, w_target, Control.a_target, Control.alpha_target, dt)
                 # 0.01秒周期でモータに指令を送る
                 if(current_time - self.prev_time_for_pwm > 0.01):
                     self.motor_control(w_r, w_l, i_r, i_l)
@@ -175,7 +190,7 @@ class Motor:
             self.ax2.grid(True)
             self.fig.tight_layout()
             now = datetime.now().replace(microsecond=0)
-            plt.savefig(f"/home/ubuntu/ros1_ws/src/tang/test/graph/{now}_v={Control.v_target}_a={Control.a_target}_w={Control.w_target}_α={Control.alpha_target}.png")
+            plt.savefig(f"/home/ubuntu/catkin_ws/src/tang/test/graph/{now}_v={Control.v_target}_a={Control.a_target}_w={Control.w_target}_α={Control.alpha_target}.png")
             self.pi.stop()
 
 def main():
