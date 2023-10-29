@@ -11,12 +11,12 @@ class Pin:
     encoder_r_B  = 6
     direction_r  = 18
     pwm_r        = 13
-    teleop_mode  = 21
-    follow_mode  = 16
+    teleop_mode  = 16
+    follow_mode  = 21
     vrx_channel  = 0
     vry_channel  = 1
     swt_channel  = 2
-    emergency_mode = 26
+    emergency_mode = 11
 
 class FOLLOWPID:
     p_gain = 2.307
@@ -31,6 +31,8 @@ class PID:
     Kp_w = 0.5
     Ki_w = 0.001
     Kd_w = 0.00
+    max_error_sum_w = 50
+    max_error_sum_v = 10
     dt = 0.005 # 0.0001がmax
 
 class PWM:
@@ -48,7 +50,9 @@ class Fig:
 
 class Control:
     max_linear_vel = 0.3
-    max_angular_vel = 0.3
+    max_angular_vel = 1.0
+    max_linear_vel_manual = 0.8
+    max_angular_vel_manual = 0.8
     max_joystick_val = 1023.0
     velocity_thresh = 1e-2
     # 入力電圧
@@ -58,9 +62,9 @@ class Control:
     # 目標速度
     v_target = 0.3
     # 目標加速度
-    a_target = 0.01
+    a_target = 0.1
     # 目標角加速度
-    alpha_target = 0.01
+    alpha_target = 0.2
     # 目標減速加速度
     d_target = -0.25
     # 逆起電圧定数
@@ -90,4 +94,4 @@ class Control:
     J = M*(0.22*0.22 + 0.2*0.2)/3
 
 class HumanFollowParam:
-    depth_min_thresh = 0.8
+    depth_min_thresh = 0.5
