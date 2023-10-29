@@ -11,7 +11,7 @@ from config import Pin, PWM, FOLLOWPID, HumanFollowParam, Control
 from motor import Motor
 # ros
 from sensor_msgs.msg import Joy
-from tang_msgs.msg import HumanInfo, Modechange, IsDismiss, Emergency
+from tang_msgs.msg import HumanInfo, Modechange, IsDismiss, Emergency, ObstacleDistance
 from geometry_msgs.msg import Twist
 
 # spi settings
@@ -60,6 +60,9 @@ class TangController():
         self.is_dismiss = IsDismiss()
         self.is_emergency_sub = rospy.Subscriber('emergency', Emergency, self.emergency_callback, queue_size=1)
         self.is_emergency = Emergency()
+        # 近接物体があるかないか
+        self.obstacle_distance_sub = rospy.Subscriber('obstacle_distance', ObstacleDistance, self.obstacle_distance_callback, queue_size=1)
+        self.is_obstacle = False
         # publisher, モードと距離の閾値、赤色検出の閾値をpub
         self.mode_pub = rospy.Publisher('current_param', Modechange, queue_size=1)
         self.prev_mode = 0
@@ -97,6 +100,17 @@ class TangController():
             print("解除")
             self.main = self.prev_mode
             self.emergency_prev_btn = False
+        return
+
+    def obstacle_distance_callback(self, msg):
+        if(0.0 < msg.distance.data < 0.3):
+            print(f"障害物検出: {msg.distance.data}")
+            self.is_obstacle = True
+            self.stop_control()
+            self.main = 99
+        else:
+            self.main = self.prev_mode
+            self.is_obstacle = False
         return
 
     def cmd_callback(self, msg):

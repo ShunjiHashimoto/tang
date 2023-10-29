@@ -1,7 +1,11 @@
 <launch>
 
+  <include file="$(find ydlidar_ros_driver)/launch/GS2.launch"/>
+
   <node name="tang_control" pkg="tang_control" type="tang_control.py" output="screen">
     <param name = "speed" type = "int" value = "30"/>
   </node>
-  
+
+  <node name="obstacle_distance_calculator_node" pkg="tang_control" type="obstacle_distance_calculator.py">
+  </node> 
 </launch>
