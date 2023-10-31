@@ -97,7 +97,6 @@ class TangController():
             self.main = 99
             self.emergency_prev_btn = True
         elif(self.emergency_prev_btn == True and msg.is_emergency == False):
-            print("解除")
             self.main = self.prev_mode
             self.emergency_prev_btn = False
         return

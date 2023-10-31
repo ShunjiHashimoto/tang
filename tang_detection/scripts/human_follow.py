@@ -6,6 +6,7 @@ import datetime
 import math
 import numpy as np
 from geometry_msgs.msg import Point
+from mymodule import lcd_display
 from tang_msgs.msg import HumanInfo, Modechange, IsDismiss, Emergency
 from config import CameraConfig, HumanDetectionConfig
 import jetson_utils
@@ -122,6 +123,7 @@ class HumanFollower():
         self.prev_human_point_pixel_z = 0.0
         # Emergency
         self.prev_pin_val = None
+        self.mylcd = lcd_display.lcd()
     
     def mode_change_callback(self, msg):
         self.current_mode = msg
@@ -160,6 +162,8 @@ class HumanFollower():
         human_input = self.calc_human_input(color_intr, human_point_pixel, delta_t)
         dismiss_human_time = 0.0
         rospy.loginfo("Start Human Detection!")
+        self.mylcd.lcd_clear()
+        self.mylcd.lcd_display_string("Start Follow", 1)
 
         while not rospy.is_shutdown():
             pin_val = GPIO.input(emergency_mode_pin)
@@ -169,13 +173,15 @@ class HumanFollower():
                 emergency_output.is_emergency = True
                 self.emergency_btn_publisher.publish(emergency_output)
                 self.prev_pin_val = 1
-                print("緊急停止モード")
+                rospy.loginfo("緊急停止")
                 continue
             else:
                 emergency_output = Emergency()
                 emergency_output.is_emergency = False
                 self.emergency_btn_publisher.publish(emergency_output)
                 self.prev_pin_val = 0
+                rospy.loginfo("緊急停止解除")
+                self.mylcd.lcd_display_string("Start Follow", 1)
             self.is_dismiss.flag = False
             frame, depth_frame = self.real_sense_camera.get_frame()
             if not frame.any(): print("frame Nothing")

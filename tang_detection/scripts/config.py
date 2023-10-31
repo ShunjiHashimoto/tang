@@ -6,7 +6,7 @@ class CameraConfig:
     WIDTH  = 640
     HEIGHT = 480
     FPS    = 60
-    depth_thresh = 6.0
+    depth_thresh = 5.0
     # decimarion_filterのパラメータ
     decimate = rs.decimation_filter()
     decimate.set_option(rs.option.filter_magnitude, 1)
@@ -28,6 +28,6 @@ class HumanDetectionConfig:
     # ssd-mobilenet-v2, peoplenet
     model = "ssd-mobilenet-v2"
     # 人を見失ったときにロボットが止まるまでの時間
-    dismiss_time_thresh = 1.0
+    dismiss_time_thresh = 2.0
     # depth画像の中で採用する最小のdepth
     min_depth_threshold = 0.05
